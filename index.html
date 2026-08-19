@@ -144,6 +144,8 @@ const emptyData=()=>({series:[],issues:[],events:[]});
 let DATA = emptyData();
 let currentTab = 'library';
 let openSeriesId = null;
+// 'alpha' | 'year-asc' | 'year-desc'
+let librarySort = 'alpha';
 let accessToken=null, tokenExpiry=0, fileId=null, tokenClient=null;
 
 /* =========================================================
@@ -380,6 +382,25 @@ function render(){
   wireEvents();
 }
 
+/* ---------- Library helpers ---------- */
+// Extract year from series name parenthetical, e.g. "X-Men (2021)" → 2021
+// Falls back to the earliest issue release year, then 9999 for sorting.
+function seriesYear(s){
+  const m = (s.name||'').match(/\((\d{4})\)\s*$/);
+  if(m) return parseInt(m[1],10);
+  const issues = DATA.issues.filter(i=>i.seriesId===s.id);
+  const dates = issues.map(i=>i.releaseDate).filter(Boolean).sort();
+  if(dates.length) return parseInt(dates[0].slice(0,4),10);
+  return 9999;
+}
+function sortSeries(list){
+  const copy=[...list];
+  if(librarySort==='alpha') return copy.sort((a,b)=>a.name.localeCompare(b.name));
+  if(librarySort==='year-asc') return copy.sort((a,b)=>seriesYear(a)-seriesYear(b));
+  if(librarySort==='year-desc') return copy.sort((a,b)=>seriesYear(b)-seriesYear(a));
+  return copy;
+}
+
 /* ---------- Library ---------- */
 const LIBRARY_STATUS_FILTERS = [
   {id:'', label:'All'}, {id:'read', label:'Read'}, {id:'owned', label:'Owned'}, {id:'want', label:'Want'}
@@ -400,7 +421,15 @@ function viewLibrary(){
       <div class="relative sm:max-w-xs flex-1">
         <input id="seriesSearch" placeholder="Search series…" style="padding-left:30px" value="${esc(window.__seriesQuery||'')}" />
       </div>
-      <button class="btn btn-default" id="newSeriesToggle">${icon('plus')} New series</button>
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold shrink-0" style="color:var(--textDim)">Sort:</span>
+        <select id="librarySortSelect" style="width:auto">
+          <option value="alpha" ${librarySort==='alpha'?'selected':''}>A → Z</option>
+          <option value="year-asc" ${librarySort==='year-asc'?'selected':''}>Year ↑</option>
+          <option value="year-desc" ${librarySort==='year-desc'?'selected':''}>Year ↓</option>
+        </select>
+        <button class="btn btn-default" id="newSeriesToggle">${icon('plus')} New series</button>
+      </div>
     </div>`;
   html += `<div class="flex items-center gap-1.5 flex-wrap">
       <span class="text-xs font-semibold" style="color:var(--textDim)">Show:</span>
@@ -415,6 +444,7 @@ function viewLibrary(){
     if(statusFilter){
       visible = visible.filter(s=> DATA.issues.some(i=>i.seriesId===s.id && statusOf(i)===statusFilter));
     }
+    visible = sortSeries(visible);
     if(visible.length===0) return;
     const color = publisherColor(publisher);
     const isCollapsed = collapsed.has(publisher);
@@ -767,6 +797,8 @@ function wireEvents(){
   // Library
   const searchInput = document.getElementById('seriesSearch');
   if(searchInput) searchInput.addEventListener('input', e=>{ window.__seriesQuery=e.target.value; render(); });
+  const librarySortSelect = document.getElementById('librarySortSelect');
+  if(librarySortSelect) librarySortSelect.addEventListener('change', e=>{ librarySort=e.target.value; render(); });
   const newSeriesToggle = document.getElementById('newSeriesToggle');
   if(newSeriesToggle) newSeriesToggle.addEventListener('click', ()=>{ window.__showNewSeries=!window.__showNewSeries; render(); });
   main.querySelectorAll('[data-library-status-filter]').forEach(el=>el.addEventListener('click', ()=>{
