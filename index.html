@@ -413,16 +413,26 @@ const LIBRARY_STATUS_FILTERS = [
 // Builds just the series sections — called independently during search so focus isn't lost
 function buildSeriesSections(){
   const statusFilter = window.__libraryStatusFilter || '';
+  const hideCompleted = !!window.__hideCompleted;
+  const hideLimited   = !!window.__hideLimited;
   const collapsed = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
   const q=(window.__seriesQuery||'').toLowerCase();
   const subgroupMode = window.__librarySubgroup || 'publisher'; // 'publisher'|'era'|'family'
+
+  // Series-status filter applied globally before grouping
+  function applySeriesStatusFilter(list){
+    let out = list;
+    if(hideCompleted) out = out.filter(s=>s.status!=='completed');
+    if(hideLimited)   out = out.filter(s=>s.status!=='limited');
+    return out;
+  }
 
   let out = '';
 
   if(subgroupMode === 'era' || subgroupMode === 'family'){
     const groups = {}; // groupKey -> [{series, color}]
     const ungrouped = [];
-    DATA.series.forEach(s=>{
+    applySeriesStatusFilter(DATA.series).forEach(s=>{
       const tagList = subgroupMode==='era' ? (s.eras||[]) : (s.families||[]);
       const defs = subgroupMode==='era' ? (DATA.eras||[]) : (DATA.families||[]);
       if(tagList.length===0){ ungrouped.push(s); return; }
@@ -458,7 +468,7 @@ function buildSeriesSections(){
   } else {
     // Default: group by publisher
     const groups={};
-    DATA.series.forEach(s=>{ const k=s.publisher||'Unknown'; (groups[k]=groups[k]||[]).push(s); });
+    applySeriesStatusFilter(DATA.series).forEach(s=>{ const k=s.publisher||'Unknown'; (groups[k]=groups[k]||[]).push(s); });
     const publishers = Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0]));
     publishers.forEach(([publisher, list])=>{
       let visible = q ? list.filter(s=>s.name.toLowerCase().includes(q)) : list;
@@ -515,9 +525,11 @@ function viewLibrary(){
       <span class="text-xs font-semibold" style="color:var(--textDim)">Show:</span>
       ${LIBRARY_STATUS_FILTERS.map(f=>`<button class="btn ${statusFilter===f.id?'btn-default':'btn-ghost'}" data-library-status-filter="${f.id}">${f.label}</button>`).join('')}
     </div>`;
-  // No-date filter
-  html += `<div class="flex items-center gap-2">
-      <button class="btn ${window.__hideNoDates?'btn-default':'btn-ghost'}" id="toggleHideNoDates">${icon('calendar-off')} ${window.__hideNoDates?'Hiding undated':'Show undated'}</button>
+  // Series-type hide toggles
+  html += `<div class="flex items-center gap-2 flex-wrap">
+      <button class="btn ${window.__hideNoDates?'btn-default':'btn-ghost'}" id="toggleHideNoDates">${icon('calendar-off')} ${window.__hideNoDates?'Hiding undated':'Undated'}</button>
+      <button class="btn ${window.__hideCompleted?'btn-default':'btn-ghost'}" id="toggleHideCompleted">${icon('check-circle')} ${window.__hideCompleted?'Hiding completed':'Completed'}</button>
+      <button class="btn ${window.__hideLimited?'btn-default':'btn-ghost'}" id="toggleHideLimited">${icon('bookmark')} ${window.__hideLimited?'Hiding limited':'Limited'}</button>
     </div>`;
   html += `<div id="newSeriesFormWrap">${window.__showNewSeries ? newSeriesFormHtml() : ''}</div>`;
   // Series sections — wrapped in a stable container so search can re-render just this part
@@ -1042,6 +1054,10 @@ function wireEvents(){
   // Hide-no-dates toggle
   const toggleHideNoDates = document.getElementById('toggleHideNoDates');
   if(toggleHideNoDates) toggleHideNoDates.addEventListener('click', ()=>{ window.__hideNoDates=!window.__hideNoDates; render(); });
+  const toggleHideCompleted = document.getElementById('toggleHideCompleted');
+  if(toggleHideCompleted) toggleHideCompleted.addEventListener('click', ()=>{ window.__hideCompleted=!window.__hideCompleted; render(); });
+  const toggleHideLimited = document.getElementById('toggleHideLimited');
+  if(toggleHideLimited) toggleHideLimited.addEventListener('click', ()=>{ window.__hideLimited=!window.__hideLimited; render(); });
 
   main.querySelectorAll('[data-toggle-publisher-collapse]').forEach(el=>el.addEventListener('click', ()=>{
     const pub = el.dataset.togglePublisherCollapse;
