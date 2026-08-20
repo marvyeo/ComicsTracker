@@ -551,12 +551,16 @@ function seriesRowHtml(s, color, statusFilter){
   const issues = statusFilter ? allIssues.filter(i=>statusOf(i)===statusFilter) : allIssues;
   const readCount = allIssues.filter(i=>i.read).length;
   const open = openSeriesId === s.id;
+  // Era and family badges
+  const eraBadges = (s.eras||[]).map(eid=>{ const e=(DATA.eras||[]).find(x=>x.id===eid); return e?`<span class="badge" style="background:${e.color}22;color:${e.color};border:1px solid ${e.color}55;font-size:10px">${esc(e.name)}</span>`:''; }).join('');
+  const familyBadges = (s.families||[]).map(fid=>{ const f=(DATA.families||[]).find(x=>x.id===fid); return f?`<span class="badge" style="background:${f.color}22;color:${f.color};border:1px solid ${f.color}55;font-size:10px">${esc(f.name)}</span>`:''; }).join('');
   return `<div class="card">
     <button class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" data-toggle-series="${s.id}">
-      <div class="flex items-center gap-2 min-w-0">
+      <div class="flex items-center gap-2 min-w-0 flex-wrap">
         ${icon(open?'chevron-down':'chevron-right')}
         <span class="font-semibold truncate">${esc(s.name)}</span>
         ${seriesStatusBadge(s.status, color)}
+        ${eraBadges}${familyBadges}
       </div>
       <span class="font-mono text-xs font-semibold shrink-0" style="color:var(--textDim)">${readCount}/${allIssues.length} read</span>
     </button>
@@ -565,6 +569,7 @@ function seriesRowHtml(s, color, statusFilter){
         <button class="btn btn-subtle" data-toggle-issue-form="${s.id}">${icon('plus')} Add issue</button>
         <button class="btn btn-subtle" data-mark-series-owned="${s.id}">${icon('package')} Mark all owned</button>
         <button class="btn btn-subtle" data-mark-series-read="${s.id}">${icon('eye')} Mark all read</button>
+        <button class="btn btn-subtle" data-cycle-series-status="${s.id}" data-current-status="${s.status}">${icon('refresh-cw')} ${s.status==='ongoing'?'Mark limited':s.status==='limited'?'Mark completed':'Mark ongoing'}</button>
         <button class="btn btn-ghost" data-delete-series="${s.id}">${icon('trash-2')} Delete series</button>
       </div>
       <div id="issueFormWrap-${s.id}">${window.__showIssueForm===s.id ? issueFormHtml(s.id) : ''}</div>
@@ -776,7 +781,12 @@ function viewEvents(){
       </div>`;
     }
     const visibleEvents = pubFilter ? DATA.events.filter(ev=>eventPublishers(ev.id).has(pubFilter)) : DATA.events;
-    const collapsedEvs = window.__collapsedEvents || (window.__collapsedEvents = new Set());
+    // Collapsed by default: seed the set with all event IDs the first time
+    if(!window.__collapsedEventsInited){
+      window.__collapsedEventsInited = true;
+      window.__collapsedEvents = new Set(DATA.events.map(e=>e.id));
+    }
+    const collapsedEvs = window.__collapsedEvents || (window.__collapsedEvents = new Set(DATA.events.map(e=>e.id)));
     if(visibleEvents.length===0){
       html+=emptyState('No events tagged for this publisher yet.');
     } else {
@@ -967,6 +977,12 @@ function wireSeriesEvents(main){
       el.dataset.confirming='1'; el.innerHTML = `${icon('trash-2')} Confirm delete?`; lucide.createIcons();
     }
   }));
+  main.querySelectorAll('[data-cycle-series-status]').forEach(el=>el.addEventListener('click', ()=>{
+    const sid=el.dataset.cycleSeriesStatus;
+    const cur=el.dataset.currentStatus||'ongoing';
+    const next = cur==='ongoing'?'limited': cur==='limited'?'completed':'ongoing';
+    mutate(d=>{ const s=d.series.find(x=>x.id===sid); if(s) s.status=next; });
+  }));
   main.querySelectorAll('[data-toggle-issue-form]').forEach(el=>el.addEventListener('click', ()=>{
     const id=el.dataset.toggleIssueForm; window.__showIssueForm = window.__showIssueForm===id?null:id; render();
   }));
@@ -1072,6 +1088,12 @@ function wireEvents(){
   main.querySelectorAll('[data-toggle-issue-form]').forEach(el=>el.addEventListener('click', ()=>{
     const id=el.dataset.toggleIssueForm; window.__showIssueForm = window.__showIssueForm===id?null:id; render();
   }));
+  main.querySelectorAll('[data-cycle-series-status]').forEach(el=>el.addEventListener('click', ()=>{
+    const sid=el.dataset.cycleSeriesStatus;
+    const cur=el.dataset.currentStatus||'ongoing';
+    const next = cur==='ongoing'?'limited': cur==='limited'?'completed':'ongoing';
+    mutate(d=>{ const s=d.series.find(x=>x.id===sid); if(s) s.status=next; });
+  }));
   const saveNewIssue = document.getElementById('saveNewIssue');
   if(saveNewIssue) saveNewIssue.addEventListener('click', ()=>{
     const seriesId = saveNewIssue.dataset.series;
@@ -1157,7 +1179,10 @@ function wireEvents(){
   if(saveNewEvent) saveNewEvent.addEventListener('click', ()=>{
     const name=document.getElementById('newEventName').value.trim();
     if(!name) return;
-    mutate(d=>{ d.events.push({id:uid(), name, color: FALLBACK_COLORS[d.events.length % FALLBACK_COLORS.length]}); });
+    const newId = uid();
+    // start new events collapsed
+    if(window.__collapsedEventsInited) (window.__collapsedEvents=window.__collapsedEvents||new Set()).add(newId);
+    mutate(d=>{ d.events.push({id:newId, name, color: FALLBACK_COLORS[d.events.length % FALLBACK_COLORS.length]}); });
   });
   main.querySelectorAll('[data-delete-event]').forEach(el=>el.addEventListener('click', ()=>{
     const id=el.dataset.deleteEvent;
@@ -1184,8 +1209,8 @@ function wireEvents(){
 
   // Groups tab
   function wireGroupType(type, assignKey){
-    // type='Era', assignKey='eras'; type='Family', assignKey='families'
-    const defsKey = type.toLowerCase()+'s'; // 'eras' or 'families'
+    // type='Era', assignKey='eras'  |  type='Family', assignKey='families'
+    const defsKey = assignKey; // assignKey IS the data key ('eras' or 'families')
     const saveBtn = document.getElementById(`save${type}`);
     if(saveBtn) saveBtn.addEventListener('click', ()=>{
       const name = document.getElementById(`new${type}Name`).value.trim();
