@@ -140,7 +140,7 @@ function toast(msg){
 }
 
 /* ---------- state ---------- */
-const emptyData=()=>({series:[],issues:[],events:[]});
+const emptyData=()=>({series:[],issues:[],events:[],eras:[],families:[]});
 let DATA = emptyData();
 let currentTab = 'library';
 let openSeriesId = null;
@@ -310,6 +310,8 @@ async function loadAppData(){
     const text = await driveReadFile(fileId);
     const parsed = text ? JSON.parse(text) : emptyData();
     DATA = parsed && parsed.series ? parsed : emptyData();
+    if(!DATA.eras) DATA.eras = [];
+    if(!DATA.families) DATA.families = [];
   }catch(e){
     toast('Could not load your data from Drive — starting empty. Try reloading.');
     DATA = emptyData();
@@ -348,6 +350,7 @@ const TABS = [
   {id:'tracker', label:'Tracker', icon:'clock'},
   {id:'reading', label:'Reading Order', icon:'list-ordered'},
   {id:'events', label:'Events', icon:'tag'},
+  {id:'groups', label:'Groups', icon:'layers'},
   {id:'import', label:'Import', icon:'upload'},
 ];
 function renderNav(){
@@ -377,6 +380,7 @@ function render(){
   else if(currentTab==='tracker') main.innerHTML = viewTracker();
   else if(currentTab==='reading') main.innerHTML = viewReading();
   else if(currentTab==='events') main.innerHTML = viewEvents();
+  else if(currentTab==='groups') main.innerHTML = viewGroups();
   else if(currentTab==='import') main.innerHTML = viewImport();
   lucide.createIcons();
   wireEvents();
@@ -405,23 +409,98 @@ function sortSeries(list){
 const LIBRARY_STATUS_FILTERS = [
   {id:'', label:'All'}, {id:'read', label:'Read'}, {id:'owned', label:'Owned'}, {id:'want', label:'Want'}
 ];
+
+// Builds just the series sections — called independently during search so focus isn't lost
+function buildSeriesSections(){
+  const statusFilter = window.__libraryStatusFilter || '';
+  const collapsed = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
+  const q=(window.__seriesQuery||'').toLowerCase();
+  const subgroupMode = window.__librarySubgroup || 'publisher'; // 'publisher'|'era'|'family'
+
+  let out = '';
+
+  if(subgroupMode === 'era' || subgroupMode === 'family'){
+    const groups = {}; // groupKey -> [{series, color}]
+    const ungrouped = [];
+    DATA.series.forEach(s=>{
+      const tagList = subgroupMode==='era' ? (s.eras||[]) : (s.families||[]);
+      const defs = subgroupMode==='era' ? (DATA.eras||[]) : (DATA.families||[]);
+      if(tagList.length===0){ ungrouped.push(s); return; }
+      tagList.forEach(gid=>{
+        const def = defs.find(g=>g.id===gid);
+        const gname = def ? def.name : gid;
+        (groups[gname] = groups[gname]||[]).push(s);
+      });
+    });
+    const sorted = Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0]));
+    if(ungrouped.length) sorted.push(['Ungrouped', ungrouped]);
+
+    sorted.forEach(([gname, list])=>{
+      let visible = q ? list.filter(s=>s.name.toLowerCase().includes(q)) : list;
+      if(statusFilter) visible = visible.filter(s=>DATA.issues.some(i=>i.seriesId===s.id && statusOf(i)===statusFilter));
+      visible = sortSeries(visible);
+      if(visible.length===0) return;
+      const collapseKey = `__subgroup__${gname}`;
+      const isCollapsed = collapsed.has(collapseKey);
+      const color = subgroupMode==='era'
+        ? ((DATA.eras||[]).find(e=>e.name===gname)||{}).color || '#9C7DE0'
+        : ((DATA.families||[]).find(f=>f.name===gname)||{}).color || '#38C6E8';
+      out += `<section>
+        <button class="flex items-center gap-2 mb-2 w-full text-left" data-toggle-publisher-collapse="${esc(collapseKey)}">
+          ${icon(isCollapsed?'chevron-right':'chevron-down', `style="width:14px;height:14px;color:${color}"`)}
+          <span class="w-2.5 h-2.5 rounded-full" style="background:${color}"></span>
+          <h2 class="text-sm font-bold uppercase tracking-wide" style="color:${color}">${esc(gname)}</h2>
+          <span class="text-xs" style="color:var(--textFaint)">${visible.length} series</span>
+        </button>
+        ${isCollapsed ? '' : `<div class="flex flex-col gap-2">${visible.map(s=>seriesRowHtml(s, color, statusFilter)).join('')}</div>`}
+      </section>`;
+    });
+  } else {
+    // Default: group by publisher
+    const groups={};
+    DATA.series.forEach(s=>{ const k=s.publisher||'Unknown'; (groups[k]=groups[k]||[]).push(s); });
+    const publishers = Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0]));
+    publishers.forEach(([publisher, list])=>{
+      let visible = q ? list.filter(s=>s.name.toLowerCase().includes(q)) : list;
+      if(statusFilter) visible = visible.filter(s=>DATA.issues.some(i=>i.seriesId===s.id && statusOf(i)===statusFilter));
+      visible = sortSeries(visible);
+      if(visible.length===0) return;
+      const color = publisherColor(publisher);
+      const isCollapsed = collapsed.has(publisher);
+      out += `<section>
+        <button class="flex items-center gap-2 mb-2 w-full text-left" data-toggle-publisher-collapse="${esc(publisher)}">
+          ${icon(isCollapsed?'chevron-right':'chevron-down', `style="width:14px;height:14px;color:${color}"`)}
+          <span class="w-2.5 h-2.5 rounded-full" style="background:${color}"></span>
+          <h2 class="text-sm font-bold uppercase tracking-wide" style="color:${color}">${esc(publisher)}</h2>
+          <span class="text-xs" style="color:var(--textFaint)">${visible.length} series</span>
+        </button>
+        ${isCollapsed ? '' : `<div class="flex flex-col gap-2">${visible.map(s=>seriesRowHtml(s, color, statusFilter)).join('')}</div>`}
+      </section>`;
+    });
+  }
+  return out || emptyState('No series match the current filters.');
+}
+
 function viewLibrary(){
   if(DATA.series.length===0){
     return emptyState('No series yet. Add one below, or bulk-import your list under the Import tab.') + newSeriesFormHtml();
   }
   const statusFilter = window.__libraryStatusFilter || '';
-  const collapsed = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
-
-  const groups={};
-  DATA.series.forEach(s=>{ const k=s.publisher||'Unknown'; (groups[k]=groups[k]||[]).push(s); });
-  const publishers = Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0]));
+  const subgroupMode = window.__librarySubgroup || 'publisher';
 
   let html = `<div class="flex flex-col gap-5">`;
-  html += `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-      <div class="relative sm:max-w-xs flex-1">
+  // Top toolbar
+  html += `<div class="flex flex-col sm:flex-row sm:items-center gap-2">
+      <div class="relative flex-1 sm:max-w-xs">
         <input id="seriesSearch" placeholder="Search series…" style="padding-left:30px" value="${esc(window.__seriesQuery||'')}" />
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-semibold shrink-0" style="color:var(--textDim)">Group:</span>
+        <select id="librarySubgroupSelect" style="width:auto">
+          <option value="publisher" ${subgroupMode==='publisher'?'selected':''}>Publisher</option>
+          <option value="era" ${subgroupMode==='era'?'selected':''}>Era</option>
+          <option value="family" ${subgroupMode==='family'?'selected':''}>Family</option>
+        </select>
         <span class="text-xs font-semibold shrink-0" style="color:var(--textDim)">Sort:</span>
         <select id="librarySortSelect" style="width:auto">
           <option value="alpha" ${librarySort==='alpha'?'selected':''}>A → Z</option>
@@ -431,35 +510,18 @@ function viewLibrary(){
         <button class="btn btn-default" id="newSeriesToggle">${icon('plus')} New series</button>
       </div>
     </div>`;
+  // Status filters
   html += `<div class="flex items-center gap-1.5 flex-wrap">
       <span class="text-xs font-semibold" style="color:var(--textDim)">Show:</span>
       ${LIBRARY_STATUS_FILTERS.map(f=>`<button class="btn ${statusFilter===f.id?'btn-default':'btn-ghost'}" data-library-status-filter="${f.id}">${f.label}</button>`).join('')}
     </div>`;
+  // No-date filter
+  html += `<div class="flex items-center gap-2">
+      <button class="btn ${window.__hideNoDates?'btn-default':'btn-ghost'}" id="toggleHideNoDates">${icon('calendar-off')} ${window.__hideNoDates?'Hiding undated':'Show undated'}</button>
+    </div>`;
   html += `<div id="newSeriesFormWrap">${window.__showNewSeries ? newSeriesFormHtml() : ''}</div>`;
-
-  const q=(window.__seriesQuery||'').toLowerCase();
-  publishers.forEach(([publisher, list])=>{
-    let visible = q ? list.filter(s=>s.name.toLowerCase().includes(q)) : list;
-    // when a status filter is active, only show series that have at least one matching issue
-    if(statusFilter){
-      visible = visible.filter(s=> DATA.issues.some(i=>i.seriesId===s.id && statusOf(i)===statusFilter));
-    }
-    visible = sortSeries(visible);
-    if(visible.length===0) return;
-    const color = publisherColor(publisher);
-    const isCollapsed = collapsed.has(publisher);
-    html += `<section>
-      <button class="flex items-center gap-2 mb-2 w-full text-left" data-toggle-publisher-collapse="${esc(publisher)}">
-        ${icon(isCollapsed?'chevron-right':'chevron-down', `style="width:14px;height:14px;color:${color}"`)}
-        <span class="w-2.5 h-2.5 rounded-full" style="background:${color}"></span>
-        <h2 class="text-sm font-bold uppercase tracking-wide" style="color:${color}">${esc(publisher)}</h2>
-        <span class="text-xs" style="color:var(--textFaint)">${visible.length} series</span>
-      </button>
-      ${isCollapsed ? '' : `<div class="flex flex-col gap-2">
-        ${visible.map(s=>seriesRowHtml(s, color, statusFilter)).join('')}
-      </div>`}
-    </section>`;
-  });
+  // Series sections — wrapped in a stable container so search can re-render just this part
+  html += `<div id="libSeriesContainer" class="flex flex-col gap-5">${buildSeriesSections()}</div>`;
   html += `</div>`;
   return html;
 }
@@ -484,7 +546,8 @@ function newSeriesFormHtml(){
   </div>`;
 }
 function seriesRowHtml(s, color, statusFilter){
-  const allIssues = DATA.issues.filter(i=>i.seriesId===s.id).sort((a,b)=>(a.releaseDate||'9999').localeCompare(b.releaseDate||'9999'));
+  let allIssues = DATA.issues.filter(i=>i.seriesId===s.id).sort((a,b)=>(a.releaseDate||'9999').localeCompare(b.releaseDate||'9999'));
+  if(window.__hideNoDates) allIssues = allIssues.filter(i=>i.releaseDate);
   const issues = statusFilter ? allIssues.filter(i=>statusOf(i)===statusFilter) : allIssues;
   const readCount = allIssues.filter(i=>i.read).length;
   const open = openSeriesId === s.id;
@@ -493,7 +556,7 @@ function seriesRowHtml(s, color, statusFilter){
       <div class="flex items-center gap-2 min-w-0">
         ${icon(open?'chevron-down':'chevron-right')}
         <span class="font-semibold truncate">${esc(s.name)}</span>
-        <span class="badge" style="background:${color}22;color:${color};border:1px solid ${color}55">${s.status}</span>
+        ${seriesStatusBadge(s.status, color)}
       </div>
       <span class="font-mono text-xs font-semibold shrink-0" style="color:var(--textDim)">${readCount}/${allIssues.length} read</span>
     </button>
@@ -531,15 +594,18 @@ function issueFormHtml(seriesId){
   </div>`;
 }
 function issueRowHtml(issue, showSeries){
-  const meta = STATUS_META[statusOf(issue)];
   const tags = (issue.eventIds||[]).map(id=>DATA.events.find(e=>e.id===id)).filter(Boolean);
   const delayed = (issue.dateHistory||[]).length>0;
   const series = showSeries ? DATA.series.find(s=>s.id===issue.seriesId) : null;
+  // title shown only if it exists — no "Untitled" placeholder
+  const titlePart = issue.title
+    ? `<span class="font-medium">${showSeries?`<span style="color:var(--textDim)">${esc(series?series.name:'Unknown')} · </span>`:''}${esc(issue.title)}</span>`
+    : (showSeries ? `<span style="color:var(--textDim)">${esc(series?series.name:'Unknown')}</span>` : '');
   return `<div class="row flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-2">
     <div class="flex items-center gap-2 min-w-0 flex-1">
       <span class="font-mono shrink-0 text-xs font-bold rounded px-1.5 py-0.5" style="background:var(--surface2);color:var(--textDim)">#${esc(issue.number)}</span>
-      <div class="min-w-0">
-        <div class="text-sm font-medium truncate">${showSeries?`<span style="color:var(--textDim)">${esc(series?series.name:'Unknown')} · </span>`:''}${issue.title?esc(issue.title):`<span style="color:var(--textFaint)">Untitled</span>`}</div>
+      <div class="min-w-0 flex-1">
+        ${titlePart ? `<div class="text-sm truncate">${titlePart}</div>` : ''}
         <div class="flex flex-wrap items-center gap-1.5 text-xs" style="color:var(--textFaint)">
           ${icon('calendar',`style="width:11px;height:11px"`)}
           <button class="underline decoration-dotted" data-edit-date="${issue.id}">${fmtDate(issue.releaseDate)}</button>
@@ -557,6 +623,11 @@ function issueRowHtml(issue, showSeries){
 }
 function emptyState(text, small){
   return `<div class="rounded-xl text-center ${small?'py-4 text-xs':'py-10 text-sm'}" style="color:var(--textFaint);border:1px dashed var(--border)">${esc(text)}</div>`;
+}
+function seriesStatusBadge(status, pubColor){
+  if(status==='completed') return `<span class="badge" style="background:var(--teal)22;color:var(--teal);border:1px solid var(--teal)55">✓ completed</span>`;
+  if(status==='limited')   return `<span class="badge" style="background:var(--amber)22;color:var(--amber);border:1px solid var(--amber)55">limited</span>`;
+  return `<span class="badge" style="background:${pubColor}22;color:${pubColor};border:1px solid ${pubColor}55">ongoing</span>`;
 }
 
 /* ---------- Tracker ---------- */
@@ -705,29 +776,39 @@ function viewEvents(){
       </div>`;
     }
     const visibleEvents = pubFilter ? DATA.events.filter(ev=>eventPublishers(ev.id).has(pubFilter)) : DATA.events;
+    const collapsedEvs = window.__collapsedEvents || (window.__collapsedEvents = new Set());
     if(visibleEvents.length===0){
       html+=emptyState('No events tagged for this publisher yet.');
     } else {
-      html+=`<div class="flex flex-col gap-4">`;
+      html+=`<div class="flex flex-col gap-2">`;
       visibleEvents.forEach(ev=>{
         const issues = eventIssues(ev.id);
-        html+=`<div class="card p-4">
-          <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <span class="badge" style="background:${ev.color}22;color:${ev.color};border:1px solid ${ev.color}55">${esc(ev.name)}</span>
-            <div class="flex items-center gap-1.5">
+        const isOpen = !collapsedEvs.has(ev.id);
+        const readCount = issues.filter(i=>i.read).length;
+        html+=`<div class="card">
+          <button class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" data-toggle-event-collapse="${ev.id}">
+            <div class="flex items-center gap-2 min-w-0">
+              ${icon(isOpen?'chevron-down':'chevron-right',`style="width:13px;height:13px;color:${ev.color}"`)}
+              <span class="badge" style="background:${ev.color}22;color:${ev.color};border:1px solid ${ev.color}55">${esc(ev.name)}</span>
+              <span class="text-xs" style="color:var(--textFaint)">${issues.length} issue${issues.length!==1?'s':''}</span>
+            </div>
+            <span class="font-mono text-xs shrink-0" style="color:var(--textDim)">${readCount}/${issues.length} read</span>
+          </button>
+          ${isOpen ? `<div class="px-4 pb-4">
+            <div class="flex flex-wrap gap-2 mb-3">
               ${issues.length>0?`<button class="btn btn-subtle" data-mark-event-owned="${ev.id}">${icon('package')} Mark all owned</button>
               <button class="btn btn-subtle" data-mark-event-read="${ev.id}">${icon('eye')} Mark all read</button>`:''}
-              <button style="color:var(--textFaint)" data-delete-event="${ev.id}">${icon('trash-2')}</button>
+              <button class="btn btn-ghost" data-delete-event="${ev.id}">${icon('trash-2')} Delete event</button>
             </div>
-          </div>
-          ${issues.length===0? `<div class="text-xs" style="color:var(--textFaint)">No issues tagged with this event yet.</div>`
-            : `<div class="flex flex-col gap-1">${issues.map(i=>{
-                const s=DATA.series.find(s=>s.id===i.seriesId);
-                return `<div class="flex items-center justify-between text-sm">
-                  <span>${esc(s?s.name:'')} <span style="color:var(--textFaint)">#${esc(i.number)}</span></span>
-                  <span class="font-mono text-xs" style="color:var(--textFaint)">${fmtDate(i.releaseDate)}</span>
-                </div>`;
-              }).join('')}</div>`}
+            ${issues.length===0? `<div class="text-xs" style="color:var(--textFaint)">No issues tagged with this event yet.</div>`
+              : `<div class="flex flex-col gap-1">${issues.map(i=>{
+                  const s=DATA.series.find(s=>s.id===i.seriesId);
+                  return `<div class="flex items-center justify-between text-sm rounded px-2 py-1" style="background:var(--bgAlt)">
+                    <span>${esc(s?s.name:'')} <span style="color:var(--textFaint)">#${esc(i.number)}</span></span>
+                    <span class="font-mono text-xs" style="color:var(--textFaint)">${fmtDate(i.releaseDate)}</span>
+                  </div>`;
+                }).join('')}</div>`}
+          </div>` : ''}
         </div>`;
       });
       html+=`</div>`;
@@ -735,6 +816,68 @@ function viewEvents(){
   }
   html+=`</div>`;
   return html;
+}
+
+/* ---------- Groups (Eras & Families) ---------- */
+function viewGroups(){
+  const collapsedG = window.__collapsedGroups || (window.__collapsedGroups = new Set());
+  function groupBlock(type, label, icon_name, defs, assignKey){
+    const allSeries = DATA.series;
+    let html = `<div class="card p-4 flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <div class="font-semibold flex items-center gap-2">${icon(icon_name)} ${label}</div>
+        <div class="flex gap-2 items-center">
+          <input id="new${type}Name" placeholder="New ${label.toLowerCase()} name…" style="width:180px" />
+          <input id="new${type}Color" type="color" value="#9C7DE0" style="width:36px;height:36px;padding:2px;border-radius:6px;cursor:pointer" />
+          <button class="btn btn-default" id="save${type}">${icon('plus')} Add</button>
+        </div>
+      </div>`;
+    if(defs.length===0){
+      html += emptyState(`No ${label.toLowerCase()}s defined yet.`, true);
+    } else {
+      html += `<div class="flex flex-col gap-3">`;
+      defs.forEach(g=>{
+        const isOpen = !collapsedG.has(`${type}-${g.id}`);
+        const members = allSeries.filter(s=>(s[assignKey]||[]).includes(g.id));
+        const nonMembers = allSeries.filter(s=>!(s[assignKey]||[]).includes(g.id));
+        html += `<div class="rounded-lg p-3" style="background:var(--bgAlt);border:1px solid var(--border)">
+          <div class="flex items-center gap-2 justify-between">
+            <button class="flex items-center gap-2" data-toggle-group-collapse="${type}-${g.id}">
+              ${icon(isOpen?'chevron-down':'chevron-right',`style="width:13px;height:13px;color:${g.color}"`)}
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${g.color}"></span>
+              <span class="font-semibold text-sm">${esc(g.name)}</span>
+              <span class="text-xs" style="color:var(--textFaint)">${members.length} series</span>
+            </button>
+            <button class="btn btn-ghost text-xs" data-delete-group="${type}" data-delete-group-id="${g.id}">${icon('trash-2')}</button>
+          </div>
+          ${isOpen ? `<div class="mt-3 flex flex-col gap-1">
+            ${members.length===0 ? `<div class="text-xs" style="color:var(--textFaint)">No series assigned yet.</div>` : ''}
+            ${members.map(s=>`<div class="flex items-center justify-between rounded px-2 py-1 text-sm" style="background:var(--surface)">
+              <span>${esc(s.name)}</span>
+              <button class="btn btn-ghost text-xs" data-unassign-group="${type}" data-unassign-id="${s.id}" data-group-id="${g.id}">${icon('x')} Remove</button>
+            </div>`).join('')}
+            ${nonMembers.length>0 ? `<div class="mt-1">
+              <select id="assign-${type}-${g.id}" style="width:auto">
+                <option value="">Add a series…</option>
+                ${nonMembers.sort((a,b)=>a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}
+              </select>
+            </div>` : ''}
+          </div>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+  return `<div class="flex flex-col gap-6">
+    <div class="text-sm" style="color:var(--textDim)">
+      Define <strong style="color:var(--text)">Eras</strong> (e.g. Pre-Flashpoint, New 52) and <strong style="color:var(--text)">Families</strong> (e.g. Batman titles, Spider-Man titles) to sub-group series in the Library.
+      A series can belong to multiple eras or families. Switch grouping in Library → Group dropdown.
+    </div>
+    ${groupBlock('Era','Eras','clock',DATA.eras||[],'eras')}
+    ${groupBlock('Family','Families','users',DATA.families||[],'families')}
+  </div>`;
 }
 
 /* ---------- Import ---------- */
@@ -791,12 +934,85 @@ function viewImport(){
 /* =========================================================
    EVENT WIRING (delegation on #mainView, plus a few globals)
    ========================================================= */
+
+// Wire only the series-level events (used after partial DOM re-render of libSeriesContainer)
+function wireSeriesEvents(main){
+  main.querySelectorAll('[data-toggle-publisher-collapse]').forEach(el=>el.addEventListener('click', ()=>{
+    const pub = el.dataset.togglePublisherCollapse;
+    const set = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
+    if(set.has(pub)) set.delete(pub); else set.add(pub);
+    const container = document.getElementById('libSeriesContainer');
+    if(container){ container.innerHTML = buildSeriesSections(); lucide.createIcons(); wireSeriesEvents(main); }
+    else render();
+  }));
+  main.querySelectorAll('[data-toggle-series]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.toggleSeries; openSeriesId = openSeriesId===id?null:id; window.__showIssueForm=null; render();
+  }));
+  main.querySelectorAll('[data-mark-series-owned]').forEach(el=>el.addEventListener('click', ()=>{
+    const sid=el.dataset.markSeriesOwned;
+    mutate(d=>{ d.issues.forEach(i=>{ if(i.seriesId===sid) i.purchased=true; }); });
+    toast('Marked all issues in this series as owned.');
+  }));
+  main.querySelectorAll('[data-mark-series-read]').forEach(el=>el.addEventListener('click', ()=>{
+    const sid=el.dataset.markSeriesRead;
+    mutate(d=>{ d.issues.forEach(i=>{ if(i.seriesId===sid){ i.read=true; i.purchased=true; } }); });
+    toast('Marked all issues in this series as read.');
+  }));
+  main.querySelectorAll('[data-delete-series]').forEach(el=>el.addEventListener('click', ()=>{
+    if(el.dataset.confirming){
+      const id=el.dataset.deleteSeries;
+      mutate(d=>{ d.series=d.series.filter(s=>s.id!==id); d.issues=d.issues.filter(i=>i.seriesId!==id); });
+      openSeriesId=null; render();
+    } else {
+      el.dataset.confirming='1'; el.innerHTML = `${icon('trash-2')} Confirm delete?`; lucide.createIcons();
+    }
+  }));
+  main.querySelectorAll('[data-toggle-issue-form]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.toggleIssueForm; window.__showIssueForm = window.__showIssueForm===id?null:id; render();
+  }));
+  main.querySelectorAll('[data-toggle-purchased]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.togglePurchased;
+    mutate(d=>{ const i=d.issues.find(x=>x.id===id); if(!i) return;
+      const newPurchased=!i.purchased; i.purchased=newPurchased; if(!newPurchased) i.read=false; });
+  }));
+  main.querySelectorAll('[data-toggle-read]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.toggleRead;
+    mutate(d=>{ const i=d.issues.find(x=>x.id===id); if(!i) return; i.read=!i.read; if(i.read) i.purchased=true; });
+  }));
+  main.querySelectorAll('[data-delete-issue]').forEach(el=>el.addEventListener('click', ()=>{
+    mutate(d=>{ d.issues=d.issues.filter(i=>i.id!==el.dataset.deleteIssue); });
+  }));
+  main.querySelectorAll('[data-edit-date]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.editDate;
+    const issue = DATA.issues.find(i=>i.id===id);
+    const wrap=document.createElement('span'); wrap.className='inline-flex items-center gap-1';
+    wrap.innerHTML = `<input type="date" value="${issue.releaseDate||''}" style="padding:2px 6px;font-size:12px;width:auto" id="dateEdit-${id}" />
+      <button data-confirm-date="${id}" style="color:var(--teal)">${icon('check',`style="width:13px;height:13px"`)}</button>`;
+    el.replaceWith(wrap);
+    lucide.createIcons();
+    wrap.querySelector(`[data-confirm-date]`).addEventListener('click', ()=>{
+      const newDate = document.getElementById(`dateEdit-${id}`).value;
+      mutate(d=>{
+        const i=d.issues.find(x=>x.id===id); if(!i) return;
+        i.dateHistory = i.dateHistory||[];
+        i.dateHistory.push({date:i.releaseDate, note:'delayed', changedOn: todayISO()});
+        i.releaseDate = newDate;
+      });
+    });
+  }));
+}
+
 function wireEvents(){
   const main=document.getElementById('mainView');
 
-  // Library
+  // Library — search: update query + re-render only the series list to avoid losing focus
   const searchInput = document.getElementById('seriesSearch');
-  if(searchInput) searchInput.addEventListener('input', e=>{ window.__seriesQuery=e.target.value; render(); });
+  if(searchInput) searchInput.addEventListener('input', e=>{
+    window.__seriesQuery = e.target.value;
+    const container = document.getElementById('libSeriesContainer');
+    if(container){ container.innerHTML = buildSeriesSections(); lucide.createIcons(); wireSeriesEvents(main); }
+    else render();
+  });
   const librarySortSelect = document.getElementById('librarySortSelect');
   if(librarySortSelect) librarySortSelect.addEventListener('change', e=>{ librarySort=e.target.value; render(); });
   const newSeriesToggle = document.getElementById('newSeriesToggle');
@@ -804,11 +1020,20 @@ function wireEvents(){
   main.querySelectorAll('[data-library-status-filter]').forEach(el=>el.addEventListener('click', ()=>{
     window.__libraryStatusFilter = el.dataset.libraryStatusFilter; render();
   }));
+  // Subgroup select
+  const librarySubgroupSelect = document.getElementById('librarySubgroupSelect');
+  if(librarySubgroupSelect) librarySubgroupSelect.addEventListener('change', e=>{ window.__librarySubgroup=e.target.value; render(); });
+  // Hide-no-dates toggle
+  const toggleHideNoDates = document.getElementById('toggleHideNoDates');
+  if(toggleHideNoDates) toggleHideNoDates.addEventListener('click', ()=>{ window.__hideNoDates=!window.__hideNoDates; render(); });
+
   main.querySelectorAll('[data-toggle-publisher-collapse]').forEach(el=>el.addEventListener('click', ()=>{
     const pub = el.dataset.togglePublisherCollapse;
     const set = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
     if(set.has(pub)) set.delete(pub); else set.add(pub);
-    render();
+    const container = document.getElementById('libSeriesContainer');
+    if(container){ container.innerHTML = buildSeriesSections(); lucide.createIcons(); wireSeriesEvents(main); }
+    else render();
   }));
   const saveNewSeries = document.getElementById('saveNewSeries');
   if(saveNewSeries) saveNewSeries.addEventListener('click', ()=>{
@@ -950,6 +1175,51 @@ function wireEvents(){
   }));
   const eventPublisherFilter = document.getElementById('eventPublisherFilter');
   if(eventPublisherFilter) eventPublisherFilter.addEventListener('change', e=>{ window.__eventPublisherFilter=e.target.value; render(); });
+  main.querySelectorAll('[data-toggle-event-collapse]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.toggleEventCollapse;
+    const set = window.__collapsedEvents || (window.__collapsedEvents = new Set());
+    if(set.has(id)) set.delete(id); else set.add(id);
+    render();
+  }));
+
+  // Groups tab
+  function wireGroupType(type, assignKey){
+    // type='Era', assignKey='eras'; type='Family', assignKey='families'
+    const defsKey = type.toLowerCase()+'s'; // 'eras' or 'families'
+    const saveBtn = document.getElementById(`save${type}`);
+    if(saveBtn) saveBtn.addEventListener('click', ()=>{
+      const name = document.getElementById(`new${type}Name`).value.trim();
+      const color = document.getElementById(`new${type}Color`).value || '#9C7DE0';
+      if(!name) return;
+      mutate(d=>{ if(!d[defsKey]) d[defsKey]=[]; d[defsKey].push({id:uid(),name,color}); });
+    });
+    main.querySelectorAll(`[data-delete-group="${type}"]`).forEach(el=>el.addEventListener('click', ()=>{
+      const gid = el.dataset.deleteGroupId;
+      mutate(d=>{
+        d[defsKey] = (d[defsKey]||[]).filter(g=>g.id!==gid);
+        d.series.forEach(s=>{ s[assignKey]=(s[assignKey]||[]).filter(id=>id!==gid); });
+      });
+    }));
+    main.querySelectorAll(`[data-unassign-group="${type}"]`).forEach(el=>el.addEventListener('click', ()=>{
+      const sid=el.dataset.unassignId; const gid=el.dataset.groupId;
+      mutate(d=>{ const s=d.series.find(x=>x.id===sid); if(s) s[assignKey]=(s[assignKey]||[]).filter(id=>id!==gid); });
+    }));
+    // assign select changes
+    main.querySelectorAll(`[id^="assign-${type}-"]`).forEach(sel=>sel.addEventListener('change', e=>{
+      const gid=sel.id.replace(`assign-${type}-`,'');
+      const sid=e.target.value;
+      if(!sid) return;
+      mutate(d=>{ const s=d.series.find(x=>x.id===sid); if(s){ s[assignKey]=s[assignKey]||[]; if(!s[assignKey].includes(gid)) s[assignKey].push(gid); } });
+    }));
+    main.querySelectorAll('[data-toggle-group-collapse]').forEach(el=>el.addEventListener('click', ()=>{
+      const key=el.dataset.toggleGroupCollapse;
+      const set = window.__collapsedGroups || (window.__collapsedGroups = new Set());
+      if(set.has(key)) set.delete(key); else set.add(key);
+      render();
+    }));
+  }
+  wireGroupType('Era','eras');
+  wireGroupType('Family','families');
 
   // Import
   function setImportPreview(rows){
