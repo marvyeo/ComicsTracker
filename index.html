@@ -826,11 +826,16 @@ function viewEvents(){
     const issues = eventIssues(ev.id);
     const isOpen = !collapsedEvs.has(ev.id);
     const readCount = issues.filter(i=>i.read).length;
+    const isRenaming = window.__renameEventId === ev.id;
+    const isAssigningPub = window.__assignEventPubId === ev.id;
+    const pubLabel = ev.publisher || '';
+    const ALL_PUB_OPTIONS = ['Marvel','DC','BOOM! Studios','Other'];
     return `<div class="card">
       <button class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" data-toggle-event-collapse="${ev.id}">
-        <div class="flex items-center gap-2 min-w-0">
+        <div class="flex items-center gap-2 min-w-0 flex-wrap">
           ${icon(isOpen?'chevron-down':'chevron-right',`style="width:13px;height:13px;color:${ev.color}"`)}
           <span class="badge" style="background:${ev.color}22;color:${ev.color};border:1px solid ${ev.color}55">${esc(ev.name)}</span>
+          ${pubLabel?`<span class="text-xs font-semibold" style="color:${publisherColor(pubLabel)}">${esc(pubLabel)}</span>`:''}
           <span class="text-xs" style="color:var(--textFaint)">${issues.length} issue${issues.length!==1?'s':''}</span>
           ${evSort==='date'&&eventEarliestDate(ev.id)?`<span class="text-xs" style="color:var(--textFaint)">· ${fmtDate(eventEarliestDate(ev.id))}</span>`:''}
         </div>
@@ -840,8 +845,21 @@ function viewEvents(){
         <div class="flex flex-wrap gap-2 mb-3">
           ${issues.length>0?`<button class="btn btn-subtle" data-mark-event-owned="${ev.id}">${icon('package')} Mark all owned</button>
           <button class="btn btn-subtle" data-mark-event-read="${ev.id}">${icon('eye')} Mark all read</button>`:''}
+          <button class="btn btn-subtle" data-rename-event="${ev.id}">${icon('pencil')} Rename</button>
+          <button class="btn btn-subtle" data-assign-event-pub="${ev.id}">${icon('building-2')} Publisher</button>
           <button class="btn btn-ghost" data-delete-event="${ev.id}">${icon('trash-2')} Delete event</button>
         </div>
+        ${isRenaming ? `<div class="mb-3 p-3 rounded-lg flex gap-2 items-center" style="background:var(--surface2);border:1px solid var(--border)">
+          <input id="renameEventInput-${ev.id}" value="${esc(ev.name)}" style="flex:1" />
+          <button class="btn btn-default" data-confirm-rename-event="${ev.id}">${icon('check')} Save</button>
+          <button class="btn btn-ghost" data-cancel-rename-event>${icon('x')}</button>
+        </div>` : ''}
+        ${isAssigningPub ? `<div class="mb-3 p-3 rounded-lg flex gap-2 items-center flex-wrap" style="background:var(--surface2);border:1px solid var(--border)">
+          <span class="text-xs font-semibold" style="color:var(--textDim)">Publisher:</span>
+          ${ALL_PUB_OPTIONS.map(p=>`<button class="btn ${pubLabel===p?'btn-default':'btn-ghost'} text-xs" data-set-event-pub="${ev.id}" data-pub="${p}">${p}</button>`).join('')}
+          ${pubLabel?`<button class="btn btn-ghost text-xs" data-set-event-pub="${ev.id}" data-pub="">✕ Clear</button>`:''}
+          <button class="btn btn-ghost text-xs" data-cancel-assign-event-pub>${icon('x')}</button>
+        </div>` : ''}
         ${issues.length===0? `<div class="text-xs" style="color:var(--textFaint)">No issues tagged with this event yet.</div>`
           : `<div class="flex flex-col gap-1">${issues.map(i=>{
               const s=DATA.series.find(s=>s.id===i.seriesId);
@@ -877,16 +895,19 @@ function viewEvents(){
     </div>`;
 
     if(segByPub){
-      // Group events by which publisher(s) they belong to; an event can appear in multiple segments
-      const segments = [...EVENT_PUB_SEGMENTS.map(p=>({label:p,color:publisherColor(p)})), {label:'Other',color:'#9C7DE0'}];
+      // Group events by ev.publisher (manually set), falling back to publishers inferred from tagged issues
       const assignedIds = new Set();
-      const buckets = {}; // label -> [ev]
+      const buckets = {};
       EVENT_PUB_SEGMENTS.forEach(pub=>{
-        buckets[pub] = sortEvents(DATA.events.filter(ev=>eventPublishers(ev.id).has(pub)));
+        buckets[pub] = sortEvents(DATA.events.filter(ev=>{
+          if(ev.publisher) return ev.publisher===pub;
+          return eventPublishers(ev.id).has(pub);
+        }));
         buckets[pub].forEach(ev=>assignedIds.add(ev.id));
       });
       buckets['Other'] = sortEvents(DATA.events.filter(ev=>!assignedIds.has(ev.id)));
 
+      const segments = [...EVENT_PUB_SEGMENTS.map(p=>({label:p,color:publisherColor(p)})), {label:'Other',color:'#9C7DE0'}];
       segments.forEach(({label,color})=>{
         const list = buckets[label];
         if(!list || list.length===0) return;
@@ -1214,6 +1235,35 @@ function wireEvents(){
     const next = cur==='upcoming'?'ongoing': cur==='ongoing'?'limited': cur==='limited'?'completed':'upcoming';
     mutate(d=>{ const s=d.series.find(x=>x.id===sid); if(s) s.status=next; });
   }));
+  // Rename series
+  main.querySelectorAll('[data-rename-series]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.renameSeries; window.__showRenameForm = window.__showRenameForm===id?null:id; render();
+  }));
+  main.querySelectorAll('[data-confirm-rename]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.confirmRename;
+    const newName=document.getElementById('renameSeriesInput').value.trim();
+    if(!newName) return;
+    mutate(d=>{ const s=d.series.find(x=>x.id===id); if(s) s.name=newName; });
+    window.__showRenameForm=null;
+  }));
+  const cancelRename=document.getElementById('cancelRename');
+  if(cancelRename) cancelRename.addEventListener('click',()=>{ window.__showRenameForm=null; render(); });
+  // Tag existing issues with events
+  main.querySelectorAll('[data-tag-event-issue]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.tagEventIssue;
+    window.__tagEventIssueId = window.__tagEventIssueId===id ? null : id; render();
+  }));
+  main.querySelectorAll('[data-toggle-issue-event]').forEach(el=>el.addEventListener('click', ()=>{
+    const issueId=el.dataset.toggleIssueEvent; const evId=el.dataset.eventId;
+    mutate(d=>{ const i=d.issues.find(x=>x.id===issueId); if(!i) return;
+      i.eventIds=i.eventIds||[];
+      const idx=i.eventIds.indexOf(evId);
+      if(idx>=0) i.eventIds.splice(idx,1); else i.eventIds.push(evId);
+    });
+  }));
+  main.querySelectorAll('[data-close-tag-event]').forEach(el=>el.addEventListener('click', ()=>{
+    window.__tagEventIssueId=null; render();
+  }));
   const saveNewIssue = document.getElementById('saveNewIssue');
   if(saveNewIssue) saveNewIssue.addEventListener('click', ()=>{
     const seriesId = saveNewIssue.dataset.series;
@@ -1324,6 +1374,36 @@ function wireEvents(){
   if(evSortAlpha) evSortAlpha.addEventListener('click', ()=>{ window.__eventSort='alpha'; render(); });
   const evToggleSeg = document.getElementById('evToggleSeg');
   if(evToggleSeg) evToggleSeg.addEventListener('click', ()=>{ window.__eventSegByPub=!window.__eventSegByPub; render(); });
+  // Rename event
+  main.querySelectorAll('[data-rename-event]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.renameEvent;
+    window.__renameEventId = window.__renameEventId===id?null:id;
+    window.__assignEventPubId=null; render();
+  }));
+  main.querySelectorAll('[data-confirm-rename-event]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.confirmRenameEvent;
+    const newName=document.getElementById(`renameEventInput-${id}`).value.trim();
+    if(!newName) return;
+    mutate(d=>{ const ev=d.events.find(x=>x.id===id); if(ev) ev.name=newName; });
+    window.__renameEventId=null;
+  }));
+  main.querySelectorAll('[data-cancel-rename-event]').forEach(el=>el.addEventListener('click', ()=>{
+    window.__renameEventId=null; render();
+  }));
+  // Assign publisher to event
+  main.querySelectorAll('[data-assign-event-pub]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.assignEventPub;
+    window.__assignEventPubId = window.__assignEventPubId===id?null:id;
+    window.__renameEventId=null; render();
+  }));
+  main.querySelectorAll('[data-set-event-pub]').forEach(el=>el.addEventListener('click', ()=>{
+    const id=el.dataset.setEventPub; const pub=el.dataset.pub;
+    mutate(d=>{ const ev=d.events.find(x=>x.id===id); if(ev){ if(pub) ev.publisher=pub; else delete ev.publisher; } });
+    window.__assignEventPubId=null;
+  }));
+  main.querySelectorAll('[data-cancel-assign-event-pub]').forEach(el=>el.addEventListener('click', ()=>{
+    window.__assignEventPubId=null; render();
+  }));
   main.querySelectorAll('[data-toggle-event-collapse]').forEach(el=>el.addEventListener('click', ()=>{
     const id=el.dataset.toggleEventCollapse;
     const set = window.__collapsedEvents || (window.__collapsedEvents = new Set());
