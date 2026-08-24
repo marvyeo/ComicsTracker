@@ -483,6 +483,7 @@ function buildSeriesSections(){
   const hideCompleted = !!window.__hideCompleted;
   const hideLimited   = !!window.__hideLimited;
   const hideUpcoming  = !!window.__hideUpcoming;
+  const hideArchived  = window.__hideArchived !== false; // defaults ON
   const collapsed = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
   const q=(window.__seriesQuery||'').toLowerCase();
   const subgroupMode = window.__librarySubgroup || 'publisher'; // 'publisher'|'era'|'family'
@@ -493,6 +494,7 @@ function buildSeriesSections(){
     if(hideCompleted) out = out.filter(s=>s.status!=='completed');
     if(hideLimited)   out = out.filter(s=>s.status!=='limited');
     if(hideUpcoming)  out = out.filter(s=>s.status!=='upcoming');
+    if(hideArchived)  out = out.filter(s=>!isArchivable(s));
     return out;
   }
 
@@ -600,6 +602,7 @@ function viewLibrary(){
       <button class="btn ${window.__hideUpcoming?'btn-default':'btn-ghost'}" id="toggleHideUpcoming">${icon('clock')} ${window.__hideUpcoming?'Hiding upcoming':'Upcoming'}</button>
       <button class="btn ${window.__hideCompleted?'btn-default':'btn-ghost'}" id="toggleHideCompleted">${icon('check-circle')} ${window.__hideCompleted?'Hiding completed':'Completed'}</button>
       <button class="btn ${window.__hideLimited?'btn-default':'btn-ghost'}" id="toggleHideLimited">${icon('bookmark')} ${window.__hideLimited?'Hiding limited':'Limited'}</button>
+      <button class="btn ${(window.__hideArchived!==false)?'btn-default':'btn-ghost'}" id="toggleHideArchived">${icon('archive')} ${(window.__hideArchived!==false)?'Hiding archived':'Archived'}</button>
     </div>`;
   html += `<div id="newSeriesFormWrap">${window.__showNewSeries ? newSeriesFormHtml() : ''}</div>`;
   // Series sections — wrapped in a stable container so search can re-render just this part
@@ -657,10 +660,13 @@ function seriesRowHtml(s, color, statusFilter){
         <button class="btn btn-ghost" data-delete-series="${s.id}">${icon('trash-2')} Delete series</button>
       </div>
       <div id="renameFormWrap-${s.id}">${window.__showRenameForm===s.id ? renameSeriesFormHtml(s) : ''}</div>
-      <label class="flex items-center gap-2 mb-3 text-xs font-semibold ${s.status==='completed' ? '' : 'opacity-40'}" style="color:var(--textDim)" title="${s.status==='completed' ? 'Move this series to the archive file' : 'Series must be marked Completed before it can be archived'}">
-        <input type="checkbox" data-toggle-archive="${s.id}" ${s.archived ? 'checked' : ''} ${s.status==='completed' ? '' : 'disabled'} />
-        ${icon('archive', 'style="width:14px;height:14px"')} Archive this series ${s.archived ? '<span style="color:var(--teal)">· archived</span>' : ''}
-      </label>
+      <div class="flex items-center gap-2 mb-3">
+        <label class="inline-flex items-center gap-2 text-xs font-semibold cursor-pointer select-none ${s.status==='completed' ? '' : 'opacity-40 cursor-not-allowed'}" style="color:var(--textDim)" title="${s.status==='completed' ? 'Move this series to the archive file' : 'Series must be marked Completed before it can be archived'}">
+          <input type="checkbox" class="shrink-0" style="width:16px;height:16px" data-toggle-archive="${s.id}" ${s.archived ? 'checked' : ''} ${s.status==='completed' ? '' : 'disabled'} />
+          <span class="inline-flex items-center gap-1">${icon('archive', 'style="width:14px;height:14px"')}Archive this series</span>
+        </label>
+        ${s.archived ? '<span class="text-xs font-semibold" style="color:var(--teal)">· archived</span>' : ''}
+      </div>
       <div id="issueFormWrap-${s.id}">${window.__showIssueForm===s.id ? issueFormHtml(s.id) : ''}</div>
       ${issues.length===0 ? emptyState(statusFilter ? `No "${statusFilter}" issues in this series.` : 'No issues tracked yet for this series.', true)
         : `<div class="flex flex-col gap-1.5">${issues.map(i=>issueRowHtml(i,false)).join('')}</div>`}
@@ -1190,6 +1196,8 @@ function wireEvents(){
   if(toggleHideCompleted) toggleHideCompleted.addEventListener('click', ()=>{ window.__hideCompleted=!window.__hideCompleted; render(); });
   const toggleHideLimited = document.getElementById('toggleHideLimited');
   if(toggleHideLimited) toggleHideLimited.addEventListener('click', ()=>{ window.__hideLimited=!window.__hideLimited; render(); });
+  const toggleHideArchived = document.getElementById('toggleHideArchived');
+  if(toggleHideArchived) toggleHideArchived.addEventListener('click', ()=>{ window.__hideArchived = (window.__hideArchived!==false) ? false : true; render(); });
 
   main.querySelectorAll('[data-toggle-publisher-collapse]').forEach(el=>el.addEventListener('click', ()=>{
     const pub = el.dataset.togglePublisherCollapse;
