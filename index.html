@@ -1479,6 +1479,9 @@ function wireEvents(){
     return 1 - dist / maxLen;
   }
   const FUZZY_THRESHOLD = 0.82;
+  const SINGLE_WORD_FUZZY_THRESHOLD = 0.93; // single-word names need a much higher bar — a one-character
+    // edit on a short word (e.g. "Catwoman" vs "Batwoman") can score 87%+ similar despite being
+    // completely different titles; multi-word names are safer because other words anchor the match.
   // Finds the best matching existing series for a raw imported series name.
   // Tries exact match first (after normalization), then falls back to
   // edit-distance similarity — catches typos, singular/plural drift, and
@@ -1491,6 +1494,7 @@ function wireEvents(){
       const pubMatch = candidates.filter(s=>(s.publisher||'').toLowerCase()===publisher.toLowerCase());
       if(pubMatch.length) candidates = pubMatch; // narrow to same publisher when we can, avoids cross-publisher false positives
     }
+    const threshold = norm.includes(' ') ? FUZZY_THRESHOLD : SINGLE_WORD_FUZZY_THRESHOLD;
     let best=null, bestScore=0;
     for(const s of candidates){
       const sNorm = normalizeSeriesName(s.name);
@@ -1498,7 +1502,7 @@ function wireEvents(){
       const score = nameSimilarity(norm, sNorm);
       if(score>bestScore){ bestScore=score; best=s; }
     }
-    if(best && bestScore>=FUZZY_THRESHOLD) return {series:best, type:'fuzzy', score:bestScore};
+    if(best && bestScore>=threshold) return {series:best, type:'fuzzy', score:bestScore};
     return {series:null, type:null};
   }
   function computeWillMerge(row){
