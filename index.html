@@ -1055,7 +1055,10 @@ function viewImport(){
             <div class="flex items-start gap-2">
               <input type="checkbox" data-import-include="${idx}" ${excluded?'':'checked'} style="width:16px;height:16px;margin-top:6px;flex-shrink:0" />
               <div class="grid gap-1.5" style="flex:1;grid-template-columns:2fr 0.6fr 1fr;min-width:0">
-                <input type="text" data-import-field="${idx}:seriesName" value="${esc(r.seriesName)}" placeholder="Series name" class="font-mono" style="font-size:12px;padding:4px 6px" />
+                <div style="grid-column:1/2">
+                  <input type="text" data-import-field="${idx}:seriesName" value="${esc(r.seriesName)}" placeholder="Series name" class="font-mono" style="font-size:12px;padding:4px 6px;width:100%" />
+                  ${r.__fuzzyMatched ? `<div class="text-xs mt-0.5" style="color:var(--amber)">≈ auto-matched from "${esc(r.__originalSeriesName)}"</div>` : ''}
+                </div>
                 <input type="text" data-import-field="${idx}:number" value="${esc(r.number)}" placeholder="#" class="font-mono" style="font-size:12px;padding:4px 6px" />
                 <input type="text" data-import-field="${idx}:publisher" value="${esc(r.publisher)}" placeholder="Publisher" class="font-mono" style="font-size:12px;padding:4px 6px" />
                 <input type="text" data-import-field="${idx}:title" value="${esc(r.title)}" placeholder="Title (optional)" class="font-mono" style="font-size:12px;padding:4px 6px;grid-column:1/3" />
@@ -1451,6 +1454,53 @@ function wireEvents(){
   wireGroupType('Family','families');
 
   // Import
+  // Normalizes a series name for comparison: lowercase, strip trailing "(YYYY)",
+  // strip leading articles, strip punctuation, collapse whitespace.
+  function normalizeSeriesName(name){
+    return (name||'').toLowerCase()
+      .replace(/\s*\(\d{4}\)\s*$/, '')
+      .replace(/^(the|an|a)\s+/, '')
+      .replace(/[:\-–—''".,!]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function levenshtein(a, b){
+    const m=a.length, n=b.length;
+    if(m===0) return n; if(n===0) return m;
+    const dp = Array.from({length:m+1}, (_,i)=>{ const row=new Array(n+1); row[0]=i; return row; });
+    for(let j=0;j<=n;j++) dp[0][j]=j;
+    for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j-1], dp[i-1][j], dp[i][j-1]);
+    return dp[m][n];
+  }
+  function nameSimilarity(a, b){
+    const dist = levenshtein(a, b);
+    const maxLen = Math.max(a.length, b.length) || 1;
+    return 1 - dist / maxLen;
+  }
+  const FUZZY_THRESHOLD = 0.82;
+  // Finds the best matching existing series for a raw imported series name.
+  // Tries exact match first (after normalization), then falls back to
+  // edit-distance similarity — catches typos, singular/plural drift, and
+  // unstripped year parentheticals like "Doctor Strange" vs "Doctors Strange (2026)".
+  function findSeriesMatch(rawName, publisher){
+    const norm = normalizeSeriesName(rawName);
+    if(!norm) return {series:null, type:null};
+    let candidates = DATA.series;
+    if(publisher){
+      const pubMatch = candidates.filter(s=>(s.publisher||'').toLowerCase()===publisher.toLowerCase());
+      if(pubMatch.length) candidates = pubMatch; // narrow to same publisher when we can, avoids cross-publisher false positives
+    }
+    let best=null, bestScore=0;
+    for(const s of candidates){
+      const sNorm = normalizeSeriesName(s.name);
+      if(sNorm===norm) return {series:s, type:'exact'};
+      const score = nameSimilarity(norm, sNorm);
+      if(score>bestScore){ bestScore=score; best=s; }
+    }
+    if(best && bestScore>=FUZZY_THRESHOLD) return {series:best, type:'fuzzy', score:bestScore};
+    return {series:null, type:null};
+  }
   function computeWillMerge(row){
     const series = DATA.series.find(s=>s.name.toLowerCase()===row.seriesName.toLowerCase());
     const existing = series ? DATA.issues.find(i=>i.seriesId===series.id && i.number.toLowerCase()===row.number.toLowerCase()) : null;
@@ -1470,6 +1520,21 @@ function wireEvents(){
       row.events = Array.isArray(rawEvents) ? rawEvents.filter(Boolean) : (rawEvents ? String(rawEvents).split(',').map(e=>e.trim()).filter(Boolean) : []);
       const rawOrder = row.readOrder!=null ? row.readOrder : (row.reading_order!=null ? row.reading_order : row.read_order);
       row.readOrder = (rawOrder!=null && rawOrder!=='' && !isNaN(Number(rawOrder))) ? Number(rawOrder) : null;
+
+      // Fuzzy-match the series name against existing series. If it's a fuzzy
+      // (non-exact) match, auto-correct the field to the canonical name and
+      // flag it so the row shows a note — user can retype to override.
+      row.__fuzzyMatched = false;
+      row.__originalSeriesName = null;
+      if(row.seriesName){
+        const match = findSeriesMatch(row.seriesName, row.publisher);
+        if(match.type==='fuzzy'){
+          row.__originalSeriesName = row.seriesName;
+          row.seriesName = match.series.name;
+          row.__fuzzyMatched = true;
+        }
+      }
+
       row.__willMerge = computeWillMerge(row);
       row.__include = true;
     });
@@ -1538,6 +1603,17 @@ function wireEvents(){
       if(field==='seriesName' || field==='number'){
         row.seriesName = row.seriesName.trim();
         row.number = row.number.trim();
+        if(field==='seriesName' && row.seriesName){
+          const match = findSeriesMatch(row.seriesName, row.publisher);
+          if(match.type==='fuzzy'){
+            row.__originalSeriesName = row.seriesName;
+            row.seriesName = match.series.name;
+            row.__fuzzyMatched = true;
+          } else {
+            row.__fuzzyMatched = false;
+            row.__originalSeriesName = null;
+          }
+        }
         row.__willMerge = computeWillMerge(row);
         render();
       }
@@ -1556,10 +1632,35 @@ function wireEvents(){
     const rows = (window.__importPreview || []).filter(r=>r.__include!==false);
     let mergedCount=0;
     mutate(d=>{
+      // Pass 1: for series that don't exist yet, find the earliest release date
+      // among this batch's rows for that series — used to suffix "(YYYY)" onto
+      // the series name on creation, matching the convention existing titles use.
+      const newSeriesEarliestDate = {}; // normalized series name -> earliest YYYY-MM-DD
       rows.forEach(row=>{
-        let series = d.series.find(s=>s.name.toLowerCase()===row.seriesName.toLowerCase());
-        if(!series){ series={id:uid(), name:row.seriesName, publisher: row.publisher||'Unknown', status:'ongoing'}; d.series.push(series); }
-        else if(row.publisher && series.publisher==='Unknown'){ series.publisher = row.publisher; }
+        const key = row.seriesName.toLowerCase();
+        const existsAlready = d.series.some(s=>s.name.toLowerCase()===key);
+        if(!existsAlready && row.releaseDate){
+          if(!newSeriesEarliestDate[key] || row.releaseDate < newSeriesEarliestDate[key]) newSeriesEarliestDate[key] = row.releaseDate;
+        }
+      });
+      const newlyCreatedSeries = {}; // normalized series name -> series object, so later rows in this batch reuse it
+
+      rows.forEach(row=>{
+        const key = row.seriesName.toLowerCase();
+        let series = d.series.find(s=>s.name.toLowerCase()===key) || newlyCreatedSeries[key];
+        if(!series){
+          let name = row.seriesName;
+          // Only append a year if the name doesn't already end with one (e.g. user typed "(2026)" themselves)
+          if(!/\(\d{4}\)\s*$/.test(name)){
+            const earliestDate = newSeriesEarliestDate[key];
+            if(earliestDate) name = `${name} (${earliestDate.slice(0,4)})`;
+          }
+          series = {id:uid(), name, publisher: row.publisher||'Unknown', status:'ongoing'};
+          d.series.push(series);
+          newlyCreatedSeries[key] = series;
+        } else if(row.publisher && series.publisher==='Unknown'){
+          series.publisher = row.publisher;
+        }
         const eventIds=[];
         (row.events||[]).forEach(evName=>{
           let ev = d.events.find(e=>e.name.toLowerCase()===evName.toLowerCase());
