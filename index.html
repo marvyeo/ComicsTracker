@@ -1034,24 +1034,41 @@ function viewImport(){
       ${window.__importError? `<div class="text-xs mt-2" style="color:var(--ink)">${esc(window.__importError)}</div>`:''}
     </div>`;
   if(preview.length>0){
-    const newCount = preview.filter(r=>!r.__willMerge).length;
-    const mergeCount = preview.filter(r=>r.__willMerge).length;
+    const included = preview.filter(r=>r.__include!==false);
+    const newCount = included.filter(r=>!r.__willMerge).length;
+    const mergeCount = included.filter(r=>r.__willMerge).length;
     html+=`<div class="card p-4">
-      <div class="text-sm font-semibold mb-2">Preview — ${preview.length} row${preview.length>1?'s':''}
-        <span class="font-normal text-xs" style="color:var(--textFaint)">(${newCount} new${mergeCount>0?`, ${mergeCount} will update existing issues`:''})</span>
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div class="text-sm font-semibold">Preview — ${preview.length} row${preview.length>1?'s':''}
+          <span class="font-normal text-xs" style="color:var(--textFaint)">(${included.length} selected: ${newCount} new${mergeCount>0?`, ${mergeCount} will update existing issues`:''})</span>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost" id="selectAllImport" style="font-size:12px;padding:4px 10px">Select all</button>
+          <button class="btn btn-ghost" id="selectNoneImport" style="font-size:12px;padding:4px 10px">Select none</button>
+        </div>
       </div>
-      <div class="flex flex-col gap-1 max-h-72 overflow-y-auto text-xs font-mono">
-        ${preview.map(r=>`<div class="flex flex-wrap gap-x-2 rounded px-2 py-1" style="background:var(--bgAlt)">
-          ${r.__willMerge?`<span class="badge" style="background:var(--amber)22;color:var(--amber);border:1px solid var(--amber)55">merge</span>`:''}
-          <span>${esc(r.seriesName)}</span>
-          <span style="color:var(--textFaint)">#${esc(r.number||'?')}</span>
-          <span style="color:var(--textDim)">${esc(r.publisher||'Unknown')}</span>
-          <span style="color:var(--textDim)">${esc(r.releaseDate||'no date')}</span>
-          ${r.readOrder!=null?`<span style="color:var(--teal)">order #${esc(String(r.readOrder))}</span>`:''}
-          ${r.events.length>0?`<span style="color:var(--amber)">${esc(r.events.join(', '))}</span>`:''}
-        </div>`).join('')}
+      <div class="text-xs mb-2" style="color:var(--textFaint)">Edit any field before importing. Uncheck a row to exclude it. Changes here don't touch your data until you click Import.</div>
+      <div class="flex flex-col gap-1.5 max-h-[32rem] overflow-y-auto">
+        ${preview.map((r,idx)=>{
+          const excluded = r.__include===false;
+          return `<div class="flex flex-col gap-1.5 rounded px-2 py-2" style="background:var(--bgAlt);border:1px solid var(--border);opacity:${excluded?0.45:1}" data-import-row="${idx}">
+            <div class="flex items-start gap-2">
+              <input type="checkbox" data-import-include="${idx}" ${excluded?'':'checked'} style="width:16px;height:16px;margin-top:6px;flex-shrink:0" />
+              <div class="grid gap-1.5" style="flex:1;grid-template-columns:2fr 0.6fr 1fr;min-width:0">
+                <input type="text" data-import-field="${idx}:seriesName" value="${esc(r.seriesName)}" placeholder="Series name" class="font-mono" style="font-size:12px;padding:4px 6px" />
+                <input type="text" data-import-field="${idx}:number" value="${esc(r.number)}" placeholder="#" class="font-mono" style="font-size:12px;padding:4px 6px" />
+                <input type="text" data-import-field="${idx}:publisher" value="${esc(r.publisher)}" placeholder="Publisher" class="font-mono" style="font-size:12px;padding:4px 6px" />
+                <input type="text" data-import-field="${idx}:title" value="${esc(r.title)}" placeholder="Title (optional)" class="font-mono" style="font-size:12px;padding:4px 6px;grid-column:1/3" />
+                <input type="text" data-import-field="${idx}:releaseDate" value="${esc(r.releaseDate)}" placeholder="YYYY-MM-DD" class="font-mono" style="font-size:12px;padding:4px 6px" />
+                <input type="text" data-import-field="${idx}:events" value="${esc((r.events||[]).join(', '))}" placeholder="Events, comma-separated" class="font-mono" style="font-size:12px;padding:4px 6px;grid-column:1/3" />
+                <input type="text" data-import-field="${idx}:readOrder" value="${r.readOrder!=null?esc(String(r.readOrder)):''}" placeholder="Read order #" class="font-mono" style="font-size:12px;padding:4px 6px" />
+              </div>
+              <span class="badge shrink-0" style="margin-top:4px;background:${r.__willMerge?'var(--amber)22':'var(--teal)22'};color:${r.__willMerge?'var(--amber)':'var(--teal)'};border:1px solid ${r.__willMerge?'var(--amber)55':'var(--teal)55'}">${r.__willMerge?'merge':'new'}</span>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
-      <div class="mt-3"><button class="btn btn-default" id="doImport">${icon('check')} Import all</button></div>
+      <div class="mt-3"><button class="btn btn-default" id="doImport" ${included.length===0?'disabled':''}>${icon('check')} Import selected (${included.length})</button></div>
     </div>`;
   }
   html+=`</div>`;
@@ -1434,6 +1451,11 @@ function wireEvents(){
   wireGroupType('Family','families');
 
   // Import
+  function computeWillMerge(row){
+    const series = DATA.series.find(s=>s.name.toLowerCase()===row.seriesName.toLowerCase());
+    const existing = series ? DATA.issues.find(i=>i.seriesId===series.id && i.number.toLowerCase()===row.number.toLowerCase()) : null;
+    return !!existing;
+  }
   function setImportPreview(rows){
     // normalize + flag rows that will merge into an existing issue (same series name + issue number)
     rows.forEach(row=>{
@@ -1444,9 +1466,8 @@ function wireEvents(){
       row.releaseDate = (row.releaseDate||'').toString().trim();
       row.events = Array.isArray(row.events) ? row.events.filter(Boolean) : (row.events? String(row.events).split(',').map(e=>e.trim()).filter(Boolean) : []);
       row.readOrder = (row.readOrder!=null && row.readOrder!=='' && !isNaN(Number(row.readOrder))) ? Number(row.readOrder) : null;
-      const series = DATA.series.find(s=>s.name.toLowerCase()===row.seriesName.toLowerCase());
-      const existing = series ? DATA.issues.find(i=>i.seriesId===series.id && i.number.toLowerCase()===row.number.toLowerCase()) : null;
-      row.__willMerge = !!existing;
+      row.__willMerge = computeWillMerge(row);
+      row.__include = true;
     });
     window.__importPreview = rows.filter(r=>r.seriesName); window.__importDone=0; render();
   }
@@ -1486,9 +1507,49 @@ function wireEvents(){
     reader.readAsText(file);
     e.target.value = '';
   });
+  main.querySelectorAll('[data-import-include]').forEach(el=>el.addEventListener('change', ()=>{
+    const idx=Number(el.dataset.importInclude);
+    const row=(window.__importPreview||[])[idx];
+    if(row){ row.__include = el.checked; render(); }
+  }));
+  main.querySelectorAll('[data-import-field]').forEach(el=>{
+    const [idxStr, field] = el.dataset.importField.split(':');
+    const idx = Number(idxStr);
+    el.addEventListener('input', ()=>{
+      const row=(window.__importPreview||[])[idx];
+      if(!row) return;
+      if(field==='events'){
+        row.events = el.value.split(',').map(e=>e.trim()).filter(Boolean);
+      } else if(field==='readOrder'){
+        const n = el.value.trim();
+        row.readOrder = (n!=='' && !isNaN(Number(n))) ? Number(n) : null;
+      } else {
+        row[field] = el.value;
+      }
+      // Don't re-render on every keystroke — keeps focus/cursor intact
+    });
+    el.addEventListener('blur', ()=>{
+      const row=(window.__importPreview||[])[idx];
+      if(!row) return;
+      if(field==='seriesName' || field==='number'){
+        row.seriesName = row.seriesName.trim();
+        row.number = row.number.trim();
+        row.__willMerge = computeWillMerge(row);
+        render();
+      }
+    });
+  });
+  const selectAllImport = document.getElementById('selectAllImport');
+  if(selectAllImport) selectAllImport.addEventListener('click', ()=>{
+    (window.__importPreview||[]).forEach(r=>r.__include=true); render();
+  });
+  const selectNoneImport = document.getElementById('selectNoneImport');
+  if(selectNoneImport) selectNoneImport.addEventListener('click', ()=>{
+    (window.__importPreview||[]).forEach(r=>r.__include=false); render();
+  });
   const doImport = document.getElementById('doImport');
   if(doImport) doImport.addEventListener('click', ()=>{
-    const rows = window.__importPreview || [];
+    const rows = (window.__importPreview || []).filter(r=>r.__include!==false);
     let mergedCount=0;
     mutate(d=>{
       rows.forEach(row=>{
