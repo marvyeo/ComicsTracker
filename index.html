@@ -1458,14 +1458,18 @@ function wireEvents(){
   }
   function setImportPreview(rows){
     // normalize + flag rows that will merge into an existing issue (same series name + issue number)
+    // Accepts both camelCase (ComicsTracker's native format) and snake_case / alternate
+    // key names (common in other tools' export, e.g. PullList variants).
     rows.forEach(row=>{
-      row.seriesName = (row.seriesName||row.series||'').toString().trim();
-      row.number = (row.number||'').toString().trim();
+      row.seriesName = (row.seriesName||row.series||row.series_name||'').toString().trim();
+      row.number = (row.number!=null?row.number : row.issue!=null?row.issue : row.issue_number!=null?row.issue_number : '').toString().trim();
       row.title = (row.title||'').toString().trim();
       row.publisher = (row.publisher||'').toString().trim();
-      row.releaseDate = (row.releaseDate||'').toString().trim();
-      row.events = Array.isArray(row.events) ? row.events.filter(Boolean) : (row.events? String(row.events).split(',').map(e=>e.trim()).filter(Boolean) : []);
-      row.readOrder = (row.readOrder!=null && row.readOrder!=='' && !isNaN(Number(row.readOrder))) ? Number(row.readOrder) : null;
+      row.releaseDate = (row.releaseDate||row.release_date||row.date||'').toString().trim();
+      const rawEvents = row.events || row.event_tags || row.eventTags;
+      row.events = Array.isArray(rawEvents) ? rawEvents.filter(Boolean) : (rawEvents ? String(rawEvents).split(',').map(e=>e.trim()).filter(Boolean) : []);
+      const rawOrder = row.readOrder!=null ? row.readOrder : (row.reading_order!=null ? row.reading_order : row.read_order);
+      row.readOrder = (rawOrder!=null && rawOrder!=='' && !isNaN(Number(rawOrder))) ? Number(rawOrder) : null;
       row.__willMerge = computeWillMerge(row);
       row.__include = true;
     });
