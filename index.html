@@ -359,6 +359,49 @@ async function loadAppData(){
     lastArchivedIds = new Set();
   }
 }
+/* =========================================================
+   UPCOMING[] — computed envelope, written into the active
+   Drive file on every save. Not stored in DATA; derived fresh
+   each time from issue release dates.
+   ========================================================= */
+function computeUpcoming(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 30);
+  const todayISO2 = today.toISOString().slice(0,10);
+  const cutoffISO = cutoff.toISOString().slice(0,10);
+
+  // Build a set of event IDs that are currently "active" (have at least one
+  // issue in the window, or simply exist — we treat any named event tag as
+  // active for priority purposes since there's no explicit active/inactive flag)
+  const activeEventIds = new Set(DATA.events.map(e=>e.id));
+
+  const entries = [];
+  for(const issue of DATA.issues){
+    const d = issue.releaseDate;
+    if(!d || d < todayISO2 || d > cutoffISO) continue;
+
+    const series = DATA.series.find(s=>s.id===issue.seriesId);
+    const seriesName = series ? series.name : 'Unknown Series';
+    const label = `${seriesName} #${issue.number}`;
+
+    const hasActiveEvent = (issue.eventIds||[]).some(id=>activeEventIds.has(id));
+    const priority = hasActiveEvent ? 'high' : 'normal';
+
+    entries.push({
+      label,
+      date: d,
+      type: 'release',
+      app: 'comicstracker',
+      priority,
+      url: 'https://marvyeo.github.io/ComicsTracker/',
+    });
+  }
+
+  // Sort by date ascending, then label for stable ordering
+  entries.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : a.label.localeCompare(b.label));
+  return entries;
+}
+
 async function persist(){
   try{
     const archivedSeries = DATA.series.filter(isArchivable);
@@ -368,7 +411,7 @@ async function persist(){
     const activeIssues = DATA.issues.filter(i=>!archivedIds.has(i.seriesId));
 
     // Active file always gets written — this is the small, frequently-changing file
-    const activePayload = { series: activeSeries, issues: activeIssues, events: DATA.events, eras: DATA.eras, families: DATA.families };
+    const activePayload = { series: activeSeries, issues: activeIssues, events: DATA.events, eras: DATA.eras, families: DATA.families, upcoming: computeUpcoming() };
     await driveWriteFile(fileId, JSON.stringify(activePayload));
 
     // Archive file only gets rewritten when the set of archived series actually changed —
