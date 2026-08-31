@@ -1049,7 +1049,7 @@ function viewImport(){
     html+=`<div class="card p-4">
       <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
         <div class="text-sm font-semibold">Preview — ${preview.length} row${preview.length>1?'s':''}
-          <span class="font-normal text-xs" style="color:var(--textFaint)">(${included.length} selected: ${existingSeriesCount} to existing series, ${newSeriesCount} new series${mergeCount>0?`, ${mergeCount} will update existing issues`:''})</span>
+          <span class="font-normal text-xs" id="importSummaryText" style="color:var(--textFaint)">(${included.length} selected: ${existingSeriesCount} to existing series, ${newSeriesCount} new series${mergeCount>0?`, ${mergeCount} will update existing issues`:''})</span>
         </div>
         <div class="flex gap-2">
           <button class="btn btn-ghost" id="selectAllImport" style="font-size:12px;padding:4px 10px">Select all</button>
@@ -1603,10 +1603,34 @@ function wireEvents(){
     reader.readAsText(file);
     e.target.value = '';
   });
+  function updateImportSummary(){
+    const preview = window.__importPreview || [];
+    const included = preview.filter(r=>r.__include!==false);
+    const mergeCount = included.filter(r=>r.__willMerge).length;
+    const newSeriesCount = included.filter(r=>!r.__willMerge && !r.__matchedSeriesId).length;
+    const existingSeriesCount = included.filter(r=>!r.__willMerge && r.__matchedSeriesId).length;
+    const summaryEl = document.getElementById('importSummaryText');
+    if(summaryEl) summaryEl.textContent = `(${included.length} selected: ${existingSeriesCount} to existing series, ${newSeriesCount} new series${mergeCount>0?`, ${mergeCount} will update existing issues`:''})`;
+    const doImportBtn = document.getElementById('doImport');
+    if(doImportBtn){
+      doImportBtn.disabled = included.length===0;
+      doImportBtn.innerHTML = `${icon('check')} Import selected (${included.length})`;
+      lucide.createIcons();
+    }
+  }
+  // Checkbox toggles update the row's opacity and the summary directly, without a full
+  // render() — re-rendering destroys and recreates the scrollable list, and even with
+  // scroll-position restoration, a real browser hasn't finished layout at the moment we'd
+  // try to set scrollTop back, so the list visibly snaps to the top. Avoiding the rebuild
+  // entirely sidesteps that.
   main.querySelectorAll('[data-import-include]').forEach(el=>el.addEventListener('change', ()=>{
     const idx=Number(el.dataset.importInclude);
     const row=(window.__importPreview||[])[idx];
-    if(row){ row.__include = el.checked; render(); }
+    if(!row) return;
+    row.__include = el.checked;
+    const rowEl = el.closest('[data-import-row]');
+    if(rowEl) rowEl.style.opacity = el.checked ? '1' : '0.45';
+    updateImportSummary();
   }));
   main.querySelectorAll('[data-import-field]').forEach(el=>{
     const [idxStr, field] = el.dataset.importField.split(':');
@@ -1654,11 +1678,23 @@ function wireEvents(){
   });
   const selectAllImport = document.getElementById('selectAllImport');
   if(selectAllImport) selectAllImport.addEventListener('click', ()=>{
-    (window.__importPreview||[]).forEach(r=>r.__include=true); render();
+    (window.__importPreview||[]).forEach(r=>r.__include=true);
+    main.querySelectorAll('[data-import-include]').forEach(cb=>{
+      cb.checked=true;
+      const rowEl = cb.closest('[data-import-row]');
+      if(rowEl) rowEl.style.opacity='1';
+    });
+    updateImportSummary();
   });
   const selectNoneImport = document.getElementById('selectNoneImport');
   if(selectNoneImport) selectNoneImport.addEventListener('click', ()=>{
-    (window.__importPreview||[]).forEach(r=>r.__include=false); render();
+    (window.__importPreview||[]).forEach(r=>r.__include=false);
+    main.querySelectorAll('[data-import-include]').forEach(cb=>{
+      cb.checked=false;
+      const rowEl = cb.closest('[data-import-row]');
+      if(rowEl) rowEl.style.opacity='0.45';
+    });
+    updateImportSummary();
   });
   const doImport = document.getElementById('doImport');
   if(doImport) doImport.addEventListener('click', ()=>{
