@@ -523,6 +523,78 @@ function sortSeries(list){
   return copy;
 }
 
+/* ---------- Library: week filter ---------- */
+function toISODateLocal(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+// Monday–Sunday week containing the given Date
+function mondaySundayRange(refDate){
+  const day = refDate.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = (day===0 ? -6 : 1-day);
+  const monday = new Date(refDate); monday.setDate(refDate.getDate()+diffToMonday);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+  return { start: toISODateLocal(monday), end: toISODateLocal(sunday) };
+}
+function weekFilterRange(){
+  const d = window.__libraryWeekCustomDate;
+  if(!d) return null;
+  return mondaySundayRange(new Date(d+'T00:00:00'));
+}
+// Flat, ungrouped-by-series release list for a given week — built for "at a glance"
+// scanning rather than the usual per-series accordion, since the point is to avoid
+// having to expand every series just to see what shipped in one week.
+function buildWeekView(range){
+  const statusFilter = window.__libraryStatusFilter || '';
+  const hideCompleted = !!window.__hideCompleted;
+  const hideLimited   = !!window.__hideLimited;
+  const hideUpcoming  = !!window.__hideUpcoming;
+  const hideArchived  = window.__hideArchived !== false;
+  const q = (window.__seriesQuery||'').toLowerCase();
+
+  let issues = DATA.issues.filter(i=> i.releaseDate && i.releaseDate>=range.start && i.releaseDate<=range.end);
+  if(statusFilter) issues = issues.filter(i=>statusOf(i)===statusFilter);
+  issues = issues.filter(i=>{
+    const s = issueSeries(i);
+    if(q && !(s && s.name.toLowerCase().includes(q))) return false;
+    if(!s) return true;
+    if(hideCompleted && s.status==='completed') return false;
+    if(hideLimited && s.status==='limited') return false;
+    if(hideUpcoming && s.status==='upcoming') return false;
+    if(hideArchived && isArchivable(s)) return false;
+    return true;
+  });
+  if(issues.length===0) return emptyState(`No releases found for ${fmtDate(range.start)} – ${fmtDate(range.end)}.`);
+
+  const groups={};
+  issues.forEach(i=>{ const s=issueSeries(i); const pub=s?(s.publisher||'Unknown'):'Unknown'; (groups[pub]=groups[pub]||[]).push(i); });
+  const pubs = Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0]));
+  let out='';
+  pubs.forEach(([pub, list])=>{
+    list.sort((a,b)=>{
+      const d=(a.releaseDate||'').localeCompare(b.releaseDate||''); if(d!==0) return d;
+      const sa=issueSeries(a), sb=issueSeries(b);
+      return (sa?sa.name:'').localeCompare(sb?sb.name:'');
+    });
+    const color=publisherColor(pub);
+    out += `<section>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="w-2.5 h-2.5 rounded-full" style="background:${color}"></span>
+        <h2 class="text-sm font-bold uppercase tracking-wide" style="color:${color}">${esc(pub)}</h2>
+        <span class="text-xs" style="color:var(--textFaint)">${list.length} issue${list.length>1?'s':''}</span>
+      </div>
+      <div class="flex flex-col gap-1.5">${list.map(i=>issueRowHtml(i,true)).join('')}</div>
+    </section>`;
+  });
+  return out;
+}
+// Whichever container view is currently active — used by every partial-re-render
+// call site so search/collapse actions don't accidentally drop out of week mode.
+function currentLibraryContainerHtml(){
+  const range = weekFilterRange();
+  return range ? buildWeekView(range) : buildSeriesSections();
+}
+
 /* ---------- Library ---------- */
 const LIBRARY_STATUS_FILTERS = [
   {id:'', label:'All'}, {id:'read', label:'Read'}, {id:'owned', label:'Owned'}, {id:'want', label:'Want'}
@@ -655,9 +727,18 @@ function viewLibrary(){
       <button class="btn ${window.__hideLimited?'btn-default':'btn-ghost'}" id="toggleHideLimited">${icon('bookmark')} ${window.__hideLimited?'Hiding limited':'Limited'}</button>
       <button class="btn ${(window.__hideArchived!==false)?'btn-default':'btn-ghost'}" id="toggleHideArchived">${icon('archive')} ${(window.__hideArchived!==false)?'Hiding archived':'Archived'}</button>
     </div>`;
+  // Week filter — pick any day; snaps to that Mon–Sun window and shows a flat
+  // release list instead of the per-series accordion.
+  const weekRange = weekFilterRange();
+  html += `<div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs font-semibold shrink-0" style="color:var(--textDim)">${icon('calendar')} Week of:</span>
+      <input type="date" id="libraryWeekCustomDate" style="width:auto" value="${esc(window.__libraryWeekCustomDate||'')}" title="Pick any day — snaps to that Mon–Sun week" />
+      ${weekRange ? `<span class="text-xs font-mono" style="color:var(--teal)">${fmtDate(weekRange.start)} – ${fmtDate(weekRange.end)}</span>
+        <button class="btn btn-ghost" id="clearWeekFilter">${icon('x')} Clear</button>` : ''}
+    </div>`;
   html += `<div id="newSeriesFormWrap">${window.__showNewSeries ? newSeriesFormHtml() : ''}</div>`;
   // Series sections — wrapped in a stable container so search can re-render just this part
-  html += `<div id="libSeriesContainer" class="flex flex-col gap-5">${buildSeriesSections()}</div>`;
+  html += `<div id="libSeriesContainer" class="flex flex-col gap-5">${currentLibraryContainerHtml()}</div>`;
   html += `</div>`;
   return html;
 }
@@ -1149,7 +1230,7 @@ function wireSeriesEvents(main){
     const set = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
     if(set.has(pub)) set.delete(pub); else set.add(pub);
     const container = document.getElementById('libSeriesContainer');
-    if(container){ container.innerHTML = buildSeriesSections(); lucide.createIcons(); wireSeriesEvents(main); }
+    if(container){ container.innerHTML = currentLibraryContainerHtml(); lucide.createIcons(); wireSeriesEvents(main); }
     else render();
   }));
   main.querySelectorAll('[data-toggle-series]').forEach(el=>el.addEventListener('click', ()=>{
@@ -1254,7 +1335,7 @@ function wireEvents(){
   if(searchInput) searchInput.addEventListener('input', e=>{
     window.__seriesQuery = e.target.value;
     const container = document.getElementById('libSeriesContainer');
-    if(container){ container.innerHTML = buildSeriesSections(); lucide.createIcons(); wireSeriesEvents(main); }
+    if(container){ container.innerHTML = currentLibraryContainerHtml(); lucide.createIcons(); wireSeriesEvents(main); }
     else render();
   });
   const librarySortSelect = document.getElementById('librarySortSelect');
@@ -1278,13 +1359,24 @@ function wireEvents(){
   if(toggleHideLimited) toggleHideLimited.addEventListener('click', ()=>{ window.__hideLimited=!window.__hideLimited; render(); });
   const toggleHideArchived = document.getElementById('toggleHideArchived');
   if(toggleHideArchived) toggleHideArchived.addEventListener('click', ()=>{ window.__hideArchived = (window.__hideArchived!==false) ? false : true; render(); });
+  // Week filter — date picker snaps to Mon–Sun; clear button resets
+  const libraryWeekCustomDate = document.getElementById('libraryWeekCustomDate');
+  if(libraryWeekCustomDate) libraryWeekCustomDate.addEventListener('change', e=>{
+    window.__libraryWeekCustomDate = e.target.value || '';
+    render();
+  });
+  const clearWeekFilter = document.getElementById('clearWeekFilter');
+  if(clearWeekFilter) clearWeekFilter.addEventListener('click', ()=>{
+    window.__libraryWeekCustomDate = '';
+    render();
+  });
 
   main.querySelectorAll('[data-toggle-publisher-collapse]').forEach(el=>el.addEventListener('click', ()=>{
     const pub = el.dataset.togglePublisherCollapse;
     const set = window.__collapsedPublishers || (window.__collapsedPublishers = new Set());
     if(set.has(pub)) set.delete(pub); else set.add(pub);
     const container = document.getElementById('libSeriesContainer');
-    if(container){ container.innerHTML = buildSeriesSections(); lucide.createIcons(); wireSeriesEvents(main); }
+    if(container){ container.innerHTML = currentLibraryContainerHtml(); lucide.createIcons(); wireSeriesEvents(main); }
     else render();
   }));
   const saveNewSeries = document.getElementById('saveNewSeries');
