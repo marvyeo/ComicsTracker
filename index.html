@@ -1180,6 +1180,7 @@ function viewImport(){
           <button class="btn btn-ghost" id="selectNoneImport" style="font-size:12px;padding:4px 10px">Select none</button>
         </div>
       </div>
+      ${window.__importFromFile && preview.some(r=>r.__newSeries) ? `<div class="text-xs mb-2" style="color:var(--purple, #9C7DE0)">${preview.filter(r=>r.__newSeries).length} issue(s) from series you don't track yet are listed last and unticked. Tick any you want to start following.</div>` : ''}
       <div class="text-xs mb-2" style="color:var(--textFaint)">Edit any field before importing. Uncheck a row to exclude it. Changes here don't touch your data until you click Import.</div>
       <div id="importPreviewList" class="flex flex-col gap-1.5 max-h-[32rem] overflow-y-auto">
         ${preview.map((r,idx)=>{
@@ -1189,7 +1190,7 @@ function viewImport(){
           let badgeLabel, badgeColor;
           if(r.__willMerge){ badgeLabel='merge'; badgeColor='var(--amber)'; }
           else if(matchedSeries){ badgeLabel='existing series'; badgeColor='#4FC3B0'; }
-          else { badgeLabel='new series'; badgeColor='var(--purple, #9C7DE0)'; }
+          else { badgeLabel = (window.__importFromFile && excluded) ? 'new series — tick to start tracking' : 'new series'; badgeColor='var(--purple, #9C7DE0)'; }
           return `<div class="flex flex-col gap-1.5 rounded px-2 py-2" style="background:var(--bgAlt);border:1px solid var(--border);opacity:${excluded?0.45:1}" data-import-row="${idx}">
             <div class="flex items-start gap-2">
               <input type="checkbox" data-import-include="${idx}" ${excluded?'':'checked'} style="width:16px;height:16px;margin-top:6px;flex-shrink:0" />
@@ -1662,7 +1663,8 @@ function wireEvents(){
     const existing = series ? DATA.issues.find(i=>i.seriesId===series.id && i.number.toLowerCase()===row.number.toLowerCase()) : null;
     return !!existing;
   }
-  function setImportPreview(rows){
+  function setImportPreview(rows, opts){
+    opts = opts || {};
     // normalize + flag rows that will merge into an existing issue (same series name + issue number)
     // Accepts both camelCase (ComicsTracker's native format) and snake_case / alternate
     // key names (common in other tools' export, e.g. PullList variants).
@@ -1698,9 +1700,18 @@ function wireEvents(){
       }
 
       row.__willMerge = computeWillMerge(row);
-      row.__include = true;
+      // PullList files list every solicited issue: new series start unticked so you opt in to them
+      row.__newSeries = !row.__willMerge && !row.__matchedSeriesId;
+      row.__include = opts.fromFile ? !row.__newSeries : true;
     });
-    window.__importPreview = rows.filter(r=>r.seriesName); window.__importDone=0; render();
+    let kept = rows.filter(r=>r.seriesName);
+    if(opts.fromFile){
+      // tracked series first, then new series (#1s on top)
+      const isOne = r => String(r.number).replace(/^#/,'') === '1';
+      kept = kept.map((r,i)=>({r,i})).sort((a,b)=>(a.r.__newSeries-b.r.__newSeries) || (a.r.__newSeries ? (isOne(b.r)-isOne(a.r)) : 0) || (a.i-b.i)).map(x=>x.r);
+    }
+    window.__importFromFile = !!opts.fromFile;
+    window.__importPreview = kept; window.__importDone=0; render();
   }
   const previewImport = document.getElementById('previewImport');
   if(previewImport) previewImport.addEventListener('click', ()=>{
@@ -1729,7 +1740,7 @@ function wireEvents(){
         const parsed = JSON.parse(ev.target.result);
         const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.issues) ? parsed.issues : null);
         if(!rows) throw new Error('Expected a JSON array of issue rows.');
-        setImportPreview(rows);
+        setImportPreview(rows, { fromFile: true });
       }catch(err){
         window.__importError = "Couldn't read that file — expected a PullList-format JSON array. (" + err.message + ")";
         render();
