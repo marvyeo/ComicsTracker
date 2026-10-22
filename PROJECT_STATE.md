@@ -121,14 +121,11 @@ Status derivation: `read` → read · `purchased` → owned · neither → want.
 - Refresh button re-pulls from Drive (for cross-device sync).
 
 ## Naming conventions (critical for correct Import merge behaviour)
-> ⚠ **Check with Marvin:** a Sept 19 chat recorded that **all** publishers, Marvel included, use `Series Name (LaunchYear)` (e.g. `"Avengers (2013)"`), with no disambiguation for same-year relaunches. The Marvel `Vol. X` rule below may be out of date. Confirm, then delete whichever is wrong.
-
-- **Marvel:** `Vol. X` fan-standard. Disambiguate relaunches explicitly even when
-  sources don't, e.g. `"Avengers Vol. 5"` (2013 Hickman) vs `"The Avengers Vol. 4"`
-  (2010 Bendis); `"New Avengers Vol. 3"` vs `"The New Avengers Vol. 2"`;
-  `"Thunderbolts Vol. 2"` (2012) vs plain `"Thunderbolts"` (original run).
-- **Everyone else (DC, BOOM!, etc.):** `Series Name (LaunchYear)` — e.g.
-  `"Mighty Morphin Power Rangers (2016)"`, `"Nightwing (2016)"`.
+**Rule (confirmed by Marvin, 2026-10-22): every publisher, Marvel included, uses `Series Name (LaunchYear)`.** LaunchYear = the year that volume's #1 went on sale. The year says when a run is from without ambiguity, which `Vol. X` doesn't. Never use `Vol. X`.
+- Examples: `"Avengers (2013)"` (Hickman), `"Avengers (2010)"` (Bendis), `"Thunderbolts (1997)"`, `"Nightwing (2016)"`, `"Mighty Morphin Power Rangers (2016)"`.
+- Same-year relaunches (rare): no rule yet; flag to Marvin if one appears.
+- The PullList scheduled task prompt was updated to this rule on 2026-10-22.
+- **Migration needed:** Marvel series already in Drive under `Vol. X` names must be renamed to `(LaunchYear)`, or Import will create duplicates. Do this in a ComicsTracker chat (Sonnet) before importing the next PullList file.
 - One-shots/minis get their own `seriesName`; never fold into a parent's numbering.
 
 ## PullList (research workflow)
@@ -145,7 +142,7 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 
 ## Open items
 - [ ] Merge PR #1 (new series unticked) when Marvin approves.
-- [ ] Confirm the Marvel naming rule (see the warning above).
+- [ ] Rename existing Marvel `Vol. X` series in Drive to `(LaunchYear)` (see Naming conventions). Rule confirmed 2026-10-22.
 - [ ] iPhone redirect sign-in fallback, if Marvin uses the app installed on iPhone.
 
 ## Change log
