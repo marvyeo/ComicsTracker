@@ -1264,30 +1264,6 @@ function viewImport(){
       <div class="mt-3"><button class="btn btn-default" id="doImport" ${included.length===0?'disabled':''}>${icon('check')} Import selected (${included.length})</button></div>
     </div>`;
   }
-  // One-time tool: Marvel "Vol. X" -> "Name (LaunchYear)"
-  const mig = window.__migPlan;
-  html+=`<div class="card p-4">
-      <div class="text-sm font-semibold mb-2">Normalise Marvel series names</div>
-      <div class="text-xs mb-3 leading-relaxed" style="color:var(--textDim)">
-        One-time tidy-up: renames Marvel series named <span class="font-mono">Vol. X</span> to <span class="font-mono">Series Name (LaunchYear)</span>, using each series' earliest dated issue as the launch year.
-        Nothing changes until you press Apply. Check any row flagged <em>earliest tracked issue isn't #1</em> — the real launch year may be earlier.
-      </div>
-      <button class="btn btn-subtle" id="migScan">${icon('search')} Scan Marvel series</button>
-      ${mig ? (mig.length===0 ? `<div class="text-xs mt-3" style="color:var(--teal)">No Marvel <span class="font-mono">Vol. X</span> series found. Nothing to do.</div>` : `
-        <div class="mt-3 flex flex-col gap-2">
-          ${mig.map((r,idx)=>`
-            <div class="flex items-center gap-2 flex-wrap" style="font-size:12px">
-              <input type="checkbox" data-mig-inc="${idx}" ${r.include?'checked':''} ${r.blocked?'disabled':''} />
-              <span class="font-mono" style="min-width:180px">${esc(r.oldName)}</span>
-              <span style="color:var(--textFaint)">&rarr;</span>
-              <span class="font-mono">${esc(r.base)} (</span>
-              <input type="text" data-mig-year="${idx}" value="${esc(r.year)}" maxlength="4" class="font-mono" style="width:56px;font-size:12px;padding:2px 6px" />
-              <span class="font-mono">)</span>
-              ${r.note?`<span style="color:var(--textDim)">${esc(r.note)}</span>`:''}
-            </div>`).join('')}
-        </div>
-        <div class="mt-3"><button class="btn btn-default" id="migApply">${icon('check')} Apply ${mig.filter(r=>r.include).length} rename${mig.filter(r=>r.include).length===1?'':'s'}</button></div>`) : ''}
-    </div>`;
   html+=`</div>`;
   return html;
 }
@@ -1785,46 +1761,6 @@ function wireEvents(){
     window.__importFromFile = !!opts.fromFile;
     window.__importPreview = kept; window.__importDone=0; render();
   }
-  const migScan = document.getElementById('migScan');
-  if(migScan) migScan.addEventListener('click', ()=>{
-    const plan=[];
-    DATA.series.forEach(sr=>{
-      if(!/marvel/i.test(sr.publisher||'') || !/\bVol\.?\s*\d+/i.test(sr.name)) return;
-      const base = sr.name.replace(/\s*\bVol\.?\s*\d+\b.*$/i,'').trim();
-      const own = sr.name.match(/\((\d{4})\)\s*$/);
-      const dated = DATA.issues.filter(i=>i.seriesId===sr.id && i.releaseDate).sort((a,b)=>a.releaseDate<b.releaseDate?-1:a.releaseDate>b.releaseDate?1:0);
-      let year = own ? own[1] : (dated[0] ? dated[0].releaseDate.slice(0,4) : '');
-      let note = '';
-      if(!own && dated[0] && String(dated[0].number).replace(/^#/,'')!=='1') note='earliest tracked issue isn\'t #1 — check year';
-      if(!year) note='no dated issues — enter year';
-      plan.push({ id:sr.id, oldName:sr.name, base, year, note, include: !!year, blocked:false });
-    });
-    plan.sort((a,b)=>a.oldName.localeCompare(b.oldName));
-    window.__migPlan = plan; render();
-  });
-  document.querySelectorAll('[data-mig-inc]').forEach(el=>el.addEventListener('change', ()=>{
-    window.__migPlan[+el.dataset.migInc].include = el.checked; render();
-  }));
-  document.querySelectorAll('[data-mig-year]').forEach(el=>el.addEventListener('change', ()=>{
-    const r = window.__migPlan[+el.dataset.migYear]; r.year = el.value.trim();
-    r.include = /^\d{4}$/.test(r.year); r.note = r.include ? '' : 'enter a 4-digit year'; render();
-  }));
-  const migApply = document.getElementById('migApply');
-  if(migApply) migApply.addEventListener('click', async ()=>{
-    const todo = (window.__migPlan||[]).filter(r=>r.include && /^\d{4}$/.test(r.year));
-    if(!todo.length) return;
-    let done=0, skipped=[];
-    const saved = await mutate(d=>{
-      todo.forEach(r=>{
-        const newName = `${r.base} (${r.year})`;
-        const sr = d.series.find(x=>x.id===r.id); if(!sr) return;
-        if(d.series.some(x=>x.id!==sr.id && x.name===newName)){ skipped.push(newName); return; }
-        sr.name = newName; done++;
-      });
-    });
-    window.__migPlan = null;
-    toast(`Renamed ${done} series` + (saved ? ' and saved to Drive.' : ' but NOT saved to Drive — press Save (top right) to retry.') + (skipped.length ? ` Skipped ${skipped.length} (name already exists): ${skipped.join(', ')}` : ''));
-  });
   const previewImport = document.getElementById('previewImport');
   if(previewImport) previewImport.addEventListener('click', ()=>{
     window.__importError='';
