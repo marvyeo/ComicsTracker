@@ -31,10 +31,11 @@ Single-file app, live and working. `pulllist-methodology.md` holds the PullList 
 **4. Chat naming.** Use the **Next chat name** line at the top of this file; tell Marvin in the first reply, then bump it.
 
 ## Latest changes (Oct 2026, conductor chat)
+- **Save fix + Save button (2026-10-23, ver 4 chat):** bug: `persist()` only rewrote `comicstracker-archive.json` when the *set* of archived series changed, so renaming/editing an archived series (e.g. the Marvel migration) looked fine but reverted on reload. Now the archive is rewritten whenever its content changed (compared against `lastArchiveJson`; first save after load writes it once). `mutate()` returns the save promise; errors show the reason. New **Save** (floppy) button in the header calls `persist(true)` and toasts "Saved to Drive ✓". Refresh tooltip now warns it discards unsaved changes. Saving is otherwise automatic after every change.
 - **iPhone redirect sign-in (2026-10-23, ver 4 chat):** when the app runs as an installed iOS home-screen app, Connect uses a full-page Google OAuth redirect (implicit flow) instead of the GIS popup, and reads the token from the URL hash (state-checked, hash cleared). Desktop and browser tabs are unchanged. **Needs `https://marvyeo.github.io/ComicsTracker/` added under Authorized redirect URIs on the OAuth client in Google Cloud Console, or iPhone sign-in will fail with redirect_uri_mismatch.**
 - **`upcoming[]`** on every save: releases in the next 30 days (`type: release`); issues in active events are high priority. Shown on the Life Plan dashboard.
 - **PullList is a scheduled task:** "PullList monthly solicitations" runs on the 24th at 8:46am SGT and writes `solicitations_YYYY-MM.json` to the Drive folder "PullList" (push + email summary). Marvin imports it by hand (his choice): Import → Upload PullList .json → review → Import selected.
-- **Marvel name migration tool (PR #2 merged, 2026-10-23):** Import tab → "Normalise Marvel series names". Scans Marvel series named `Vol. X`, proposes `Name (LaunchYear)` from the earliest dated issue (year editable, rows flagged if earliest tracked issue isn't #1), applies only on confirm via `mutate()` so active/archive split is handled. Skips a rename if the new name already exists. One-time tool; can be removed after use.
+- **Marvel name migration tool (PR #2 merged, 2026-10-23):** Import tab → "Normalise Marvel series names". Scans Marvel series named `Vol. X`, proposes `Name (LaunchYear)` from the earliest dated issue (year editable, rows flagged if earliest tracked issue isn't #1), applies only on confirm via `mutate()`, which now awaits the Drive save and reports whether it saved. Skips a rename if the new name already exists. One-time tool; can be removed after use.
 - **PR #1 (merged 2026-10-23):** newly solicited series start unticked on PullList import; series already tracked stay ticked.
 - **Installable (21 Oct):** `manifest.json`, network-first `sw.js` (cache `comicstracker-v2`), ecosystem icons. iPhone redirect sign-in fallback added 2026-10-23 (see below).
 - **Manifest id fixed (22 Oct):** `"id": "/ComicsTracker/"`.
@@ -145,7 +146,7 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 - localStorage only caches OAuth token and Drive fileIds; all comic data lives in Drive.
 
 ## Open items
-- [ ] **Run the Marvel name migration** (tool is merged, not yet run): hard-refresh the app, Import tab → Normalise Marvel series names → check flagged rows → Apply. Do it BEFORE the next PullList import (task runs the 24th), or Import creates duplicates.
+- [ ] **Run the Marvel name migration** (renames made before the save fix did NOT persist for archived series, so re-run it): hard-refresh the app, Import tab → Normalise Marvel series names → check flagged rows → Apply. Do it BEFORE the next PullList import (task runs the 24th), or Import creates duplicates.
 - [ ] Add `https://marvyeo.github.io/ComicsTracker/` to Authorized redirect URIs (Google Cloud Console → Credentials → the OAuth client), then test sign-in on the installed iPhone app. Code is done and pushed.
 
 ## Change log
@@ -153,3 +154,4 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 - **ver 3 (2026-10-23):** merged PR #1 (new series start unticked on PullList import) into main. State file updated here, since the PR itself didn't touch it.
 - **ver 3 (2026-10-23, later):** added one-time Marvel `Vol. X` → `(LaunchYear)` migration tool on the Import tab (PR #2, merged). Not yet run on Drive data; once run, the tool can be removed.
 - **ver 4 (2026-10-23):** added iPhone redirect sign-in fallback in `index.html` (installed iOS app only). Marvel migration still not run: needs Marvin's signed-in app.
+- **ver 4 (2026-10-23, later):** fixed archive-file saves not persisting edits to archived series; added header Save button; migration Apply now confirms the save.

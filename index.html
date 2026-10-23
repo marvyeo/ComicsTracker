@@ -95,7 +95,8 @@
           <span id="connDot" class="inline-block w-2 h-2 rounded-full" style="background:var(--textFaint)"></span>
           <span id="connLabel" class="text-xs">Checking…</span>
         </button>
-        <button id="refreshBtn" class="btn btn-ghost" title="Refresh from Drive"><i data-lucide="refresh-cw"></i></button>
+        <button id="saveBtn" class="btn btn-ghost" title="Save to Drive now"><i data-lucide="save"></i></button>
+        <button id="refreshBtn" class="btn btn-ghost" title="Refresh from Drive (discards unsaved changes)"><i data-lucide="refresh-cw"></i></button>
         <button id="exportBtn" class="btn btn-ghost" title="Export records.json — for reference in a PullList chat"><i data-lucide="download"></i></button>
         <button id="signOutBtn" class="btn btn-ghost" title="Sign out"><i data-lucide="log-out"></i></button>
       </div>
@@ -247,6 +248,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     accessToken=null;
     location.reload();
   });
+  document.getElementById('saveBtn').addEventListener('click', ()=>persist(true));
   document.getElementById('refreshBtn').addEventListener('click', refreshFromDrive);
   document.getElementById('connStatusBtn').addEventListener('click', checkDriveConnection);
   document.getElementById('exportBtn').addEventListener('click', ()=>{
@@ -444,7 +446,8 @@ function computeUpcoming(){
   return entries;
 }
 
-async function persist(){
+let lastArchiveJson = null; // content of the archive file as last written this session (null = write once on first save)
+async function persist(announce){
   try{
     const archivedSeries = DATA.series.filter(isArchivable);
     const archivedIds = new Set(archivedSeries.map(s=>s.id));
@@ -456,19 +459,22 @@ async function persist(){
     const activePayload = { series: activeSeries, issues: activeIssues, events: DATA.events, eras: DATA.eras, families: DATA.families, upcoming: computeUpcoming() };
     await driveWriteFile(fileId, JSON.stringify(activePayload));
 
-    // Archive file only gets rewritten when the set of archived series actually changed —
-    // keeps writes cheap since this file only grows occasionally
-    const idsChanged = archivedIds.size !== lastArchivedIds.size || [...archivedIds].some(id=>!lastArchivedIds.has(id));
-    if(idsChanged){
-      const archivePayload = { series: archivedSeries, issues: archivedIssues };
-      await driveWriteFile(archiveFileId, JSON.stringify(archivePayload));
+    // Archive file is rewritten whenever its content changed (not just the set of ids),
+    // so renames/edits to archived series are saved. Skips the write when nothing changed.
+    const archiveJson = JSON.stringify({ series: archivedSeries, issues: archivedIssues });
+    if(archiveJson !== lastArchiveJson){
+      await driveWriteFile(archiveFileId, archiveJson);
+      lastArchiveJson = archiveJson;
       lastArchivedIds = archivedIds;
     }
+    if(announce) toast('Saved to Drive ✓');
+    return true;
   }catch(e){
-    toast("Couldn't save to Drive — check your connection.");
+    toast("Couldn't save to Drive (" + (e && e.message ? e.message : 'unknown error') + "). If it says 401, sign out and back in.");
+    return false;
   }
 }
-function mutate(fn){ fn(DATA); render(); persist(); }
+function mutate(fn){ fn(DATA); render(); return persist(); }
 
 async function boot(){
   document.getElementById('gateStatus').textContent = 'Connecting to Drive…';
@@ -1804,11 +1810,11 @@ function wireEvents(){
     r.include = /^\d{4}$/.test(r.year); r.note = r.include ? '' : 'enter a 4-digit year'; render();
   }));
   const migApply = document.getElementById('migApply');
-  if(migApply) migApply.addEventListener('click', ()=>{
+  if(migApply) migApply.addEventListener('click', async ()=>{
     const todo = (window.__migPlan||[]).filter(r=>r.include && /^\d{4}$/.test(r.year));
     if(!todo.length) return;
     let done=0, skipped=[];
-    mutate(d=>{
+    const saved = await mutate(d=>{
       todo.forEach(r=>{
         const newName = `${r.base} (${r.year})`;
         const sr = d.series.find(x=>x.id===r.id); if(!sr) return;
@@ -1817,7 +1823,7 @@ function wireEvents(){
       });
     });
     window.__migPlan = null;
-    toast(`Renamed ${done} series.` + (skipped.length ? ` Skipped ${skipped.length} (name already exists): ${skipped.join(', ')}` : ''));
+    toast(`Renamed ${done} series` + (saved ? ' and saved to Drive.' : ' but NOT saved to Drive — press Save (top right) to retry.') + (skipped.length ? ` Skipped ${skipped.length} (name already exists): ${skipped.join(', ')}` : ''));
   });
   const previewImport = document.getElementById('previewImport');
   if(previewImport) previewImport.addEventListener('click', ()=>{
