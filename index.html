@@ -36,7 +36,13 @@
     --border:#2E3348; --text:#ECEDF3; --textDim:#9297B0; --textFaint:#5D6280;
     --ink:#E8483C; --amber:#F0A93E; --teal:#4FC3B0;
   }
-  html,body{ background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; }
+  html,body{ background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; max-width:100%; }
+  body{ overflow-x:clip; } /* safety net: nothing should push the page wider than the screen */
+  @media (max-width:639px){
+    .tab-btn{ flex-direction:column; justify-content:center; gap:2px; padding:6px 2px; font-size:10.5px; min-width:0; }
+    #tabNav .tab-btn [data-lucide], #tabNav .tab-btn svg{ width:17px; height:17px; }
+    .hdr-actions .btn{ padding:8px 10px; }
+  }
   ::-webkit-scrollbar{ height:8px; width:8px; }
   ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:4px; }
   .font-display{ font-family:'Anton',sans-serif; letter-spacing:.02em; }
@@ -84,7 +90,7 @@
 
 <div id="appRoot" class="hidden">
   <header class="halftone relative px-3 sm:px-6 py-8 sm:py-12" style="border-bottom:1px solid var(--border)">
-    <div class="mx-auto max-w-5xl flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+    <div class="mx-auto max-w-5xl flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 min-w-0">
       <div>
         <a class="lp-back" href="https://marvyeo.github.io/LifePlan/" aria-label="Back to Life Plan">← Life Plan</a>
         <div class="flex items-center gap-2" style="color:var(--ink)">
@@ -94,11 +100,14 @@
         <h1 class="font-display text-4xl sm:text-5xl mt-1" style="line-height:1">COMICSTRACKER</h1>
         <p class="text-sm mt-1" style="color:var(--textDim)">Your comics, tracked by series, publisher, and story order.</p>
       </div>
+      <div class="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-6 min-w-0">
       <div class="flex gap-4 sm:gap-6 items-end">
         <div><div id="statRead" class="font-mono text-2xl font-bold" style="color:var(--ink)">0</div><div class="text-xs font-semibold uppercase" style="color:var(--textFaint)">Read</div></div>
         <div><div id="statOwned" class="font-mono text-2xl font-bold" style="color:var(--teal)">0</div><div class="text-xs font-semibold uppercase" style="color:var(--textFaint)">Owned</div></div>
         <div><div id="statWant" class="font-mono text-2xl font-bold" style="color:var(--amber)">0</div><div class="text-xs font-semibold uppercase" style="color:var(--textFaint)">Want</div></div>
         <div title="Completed series fully read & owned — stored in the separate archive file"><div id="statArchived" class="font-mono text-2xl font-bold" style="color:var(--textFaint)">0</div><div class="text-xs font-semibold uppercase" style="color:var(--textFaint)">Archived</div></div>
+      </div>
+      <div class="hdr-actions flex flex-wrap items-center gap-2">
         <button id="connStatusBtn" class="btn btn-ghost" title="Drive connection status">
           <span id="connDot" class="inline-block w-2 h-2 rounded-full" style="background:var(--textFaint)"></span>
           <span id="connLabel" class="text-xs">Checking…</span>
@@ -108,10 +117,11 @@
         <button id="exportBtn" class="btn btn-ghost" title="Export records.json — for reference in a PullList chat"><i data-lucide="download"></i></button>
         <button id="signOutBtn" class="btn btn-ghost" title="Sign out"><i data-lucide="log-out"></i></button>
       </div>
+      </div>
     </div>
   </header>
 
-  <nav id="tabNav" class="sticky top-0 z-10 flex gap-1 overflow-x-auto px-3 sm:px-6 py-2" style="background:var(--bgAlt); border-bottom:1px solid var(--border)"></nav>
+  <nav id="tabNav" class="sticky top-0 z-10 grid grid-cols-6 gap-1 sm:flex sm:overflow-x-auto px-3 sm:px-6 py-2" style="background:var(--bgAlt); border-bottom:1px solid var(--border)"></nav>
 
   <main class="mx-auto max-w-5xl px-3 sm:px-6 py-5 sm:py-8" id="mainView"></main>
 </div>
@@ -545,7 +555,7 @@ async function boot(){
 const TABS = [
   {id:'library', label:'Library', icon:'library'},
   {id:'tracker', label:'Tracker', icon:'clock'},
-  {id:'reading', label:'Reading Order', icon:'list-ordered'},
+  {id:'reading', label:'Reading Order', short:'Reading', icon:'list-ordered'},
   {id:'events', label:'Events', icon:'tag'},
   {id:'groups', label:'Groups', icon:'layers'},
   {id:'import', label:'Import', icon:'upload'},
@@ -554,7 +564,7 @@ function renderNav(){
   const nav=document.getElementById('tabNav');
   nav.innerHTML = TABS.map(t=>`
     <button class="tab-btn ${currentTab===t.id?'active':''}" data-tab="${t.id}">
-      ${icon(t.icon)} ${t.label}
+      ${icon(t.icon)} <span class="sm:hidden">${t.short||t.label}</span><span class="hidden sm:inline">${t.label}</span>
     </button>`).join('');
   nav.querySelectorAll('[data-tab]').forEach(btn=>{
     btn.addEventListener('click', ()=>{ currentTab=btn.dataset.tab; renderNav(); render(); });
@@ -1175,7 +1185,7 @@ function viewGroups(){
       <div class="flex items-center justify-between">
         <div class="font-semibold flex items-center gap-2">${icon(icon_name)} ${label}</div>
         <div class="flex gap-2 items-center">
-          <input id="new${type}Name" placeholder="New ${label.toLowerCase()} name…" style="width:180px" />
+          <input id="new${type}Name" placeholder="New ${label.toLowerCase()} name…" style="width:100%;max-width:180px" />
           <input id="new${type}Color" type="color" value="#9C7DE0" style="width:36px;height:36px;padding:2px;border-radius:6px;cursor:pointer" />
           <button class="btn btn-default" id="save${type}">${icon('plus')} Add</button>
         </div>
