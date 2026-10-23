@@ -170,12 +170,45 @@ function isArchivable(series){
 /* =========================================================
    AUTH — Google Identity Services
    ========================================================= */
+// iPhone home-screen (standalone) apps can't open GIS popups, so sign-in there
+// uses a full-page OAuth redirect (implicit flow) and reads the token from the URL hash.
+// Needs this page's URL listed under "Authorized redirect URIs" on the OAuth client.
+function useRedirectAuth(){
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  return ios && standalone;
+}
+function redirectUri(){ return location.origin + location.pathname; }
+function startRedirectAuth(){
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('comicstracker_oauth_state', state);
+  const p = new URLSearchParams({
+    client_id: CONFIG.CLIENT_ID, redirect_uri: redirectUri(), response_type: 'token',
+    scope: CONFIG.SCOPE, state, include_granted_scopes: 'true',
+  });
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
+}
+function consumeRedirectResult(){
+  if(!location.hash.includes('access_token') && !location.hash.includes('error=')) return;
+  const h = new URLSearchParams(location.hash.slice(1));
+  const expected = localStorage.getItem('comicstracker_oauth_state');
+  localStorage.removeItem('comicstracker_oauth_state');
+  history.replaceState(null, '', location.pathname + location.search);
+  if(h.get('error')){ pendingGateMsg = 'Sign-in failed (' + h.get('error') + ').'; return; }
+  if(!expected || h.get('state') !== expected){ pendingGateMsg = 'Sign-in failed (state mismatch). Try again.'; return; }
+  accessToken = h.get('access_token');
+  tokenExpiry = Date.now() + Number(h.get('expires_in') || 3600) * 1000;
+  localStorage.setItem('comicstracker_token', accessToken);
+  localStorage.setItem('comicstracker_token_expiry', String(tokenExpiry));
+}
+let pendingGateMsg = '';
 function initAuth(){
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.CLIENT_ID,
     scope: CONFIG.SCOPE,
     callback: onToken,
   });
+  consumeRedirectResult();
   const cachedToken = localStorage.getItem('comicstracker_token');
   const cachedExpiry = Number(localStorage.getItem('comicstracker_token_expiry') || 0);
   if(cachedToken && cachedExpiry > Date.now() + 60000){
@@ -186,6 +219,7 @@ function initAuth(){
   }
 }
 function showGate(){
+  if(pendingGateMsg) document.getElementById('gateStatus').textContent = pendingGateMsg;
   document.getElementById('gate').classList.remove('hidden');
   document.getElementById('appRoot').classList.add('hidden');
   lucide.createIcons();
@@ -204,6 +238,7 @@ function onToken(resp){
 document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('connectBtn').addEventListener('click', ()=>{
     document.getElementById('gateStatus').textContent = 'Opening Google sign-in…';
+    if(useRedirectAuth()){ startRedirectAuth(); return; }
     tokenClient.requestAccessToken({ prompt: accessToken ? '' : 'consent' });
   });
   document.getElementById('signOutBtn').addEventListener('click', ()=>{

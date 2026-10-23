@@ -1,9 +1,9 @@
 # ComicsTracker — Project State
 
-> **Next chat name: `ComicsTracker ver 4`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **ComicsTracker ver 4**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `ComicsTracker ver 5`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **ComicsTracker ver 5**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
-**State version:** 4 (moved into the repo 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
+**State version:** 5 (moved into the repo 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
 **Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
 Single-file app, live and working. `pulllist-methodology.md` holds the PullList research method (not in this repo yet; attach it when doing PullList work).
 
@@ -31,11 +31,12 @@ Single-file app, live and working. `pulllist-methodology.md` holds the PullList 
 **4. Chat naming.** Use the **Next chat name** line at the top of this file; tell Marvin in the first reply, then bump it.
 
 ## Latest changes (Oct 2026, conductor chat)
+- **iPhone redirect sign-in (2026-10-23, ver 4 chat):** when the app runs as an installed iOS home-screen app, Connect uses a full-page Google OAuth redirect (implicit flow) instead of the GIS popup, and reads the token from the URL hash (state-checked, hash cleared). Desktop and browser tabs are unchanged. **Needs `https://marvyeo.github.io/ComicsTracker/` added under Authorized redirect URIs on the OAuth client in Google Cloud Console, or iPhone sign-in will fail with redirect_uri_mismatch.**
 - **`upcoming[]`** on every save: releases in the next 30 days (`type: release`); issues in active events are high priority. Shown on the Life Plan dashboard.
 - **PullList is a scheduled task:** "PullList monthly solicitations" runs on the 24th at 8:46am SGT and writes `solicitations_YYYY-MM.json` to the Drive folder "PullList" (push + email summary). Marvin imports it by hand (his choice): Import → Upload PullList .json → review → Import selected.
 - **Marvel name migration tool (PR #2 merged, 2026-10-23):** Import tab → "Normalise Marvel series names". Scans Marvel series named `Vol. X`, proposes `Name (LaunchYear)` from the earliest dated issue (year editable, rows flagged if earliest tracked issue isn't #1), applies only on confirm via `mutate()` so active/archive split is handled. Skips a rename if the new name already exists. One-time tool; can be removed after use.
 - **PR #1 (merged 2026-10-23):** newly solicited series start unticked on PullList import; series already tracked stay ticked.
-- **Installable (21 Oct):** `manifest.json`, network-first `sw.js` (cache `comicstracker-v2`), ecosystem icons. No iPhone redirect sign-in fallback yet.
+- **Installable (21 Oct):** `manifest.json`, network-first `sw.js` (cache `comicstracker-v2`), ecosystem icons. iPhone redirect sign-in fallback added 2026-10-23 (see below).
 - **Manifest id fixed (22 Oct):** `"id": "/ComicsTracker/"`.
 
 ## Stack & hosting
@@ -145,9 +146,10 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 
 ## Open items
 - [ ] **Run the Marvel name migration** (tool is merged, not yet run): hard-refresh the app, Import tab → Normalise Marvel series names → check flagged rows → Apply. Do it BEFORE the next PullList import (task runs the 24th), or Import creates duplicates.
-- [ ] iPhone redirect sign-in fallback, if Marvin uses the app installed on iPhone.
+- [ ] Add `https://marvyeo.github.io/ComicsTracker/` to Authorized redirect URIs (Google Cloud Console → Credentials → the OAuth client), then test sign-in on the installed iPhone app. Code is done and pushed.
 
 ## Change log
 - **ver 2 (2026-10-22):** moved into the repo as `PROJECT_STATE.md`; added Session Rules; recorded `upcoming[]`, the PullList task, PR #1, installability and the manifest id fix.
 - **ver 3 (2026-10-23):** merged PR #1 (new series start unticked on PullList import) into main. State file updated here, since the PR itself didn't touch it.
 - **ver 3 (2026-10-23, later):** added one-time Marvel `Vol. X` → `(LaunchYear)` migration tool on the Import tab (PR #2, merged). Not yet run on Drive data; once run, the tool can be removed.
+- **ver 4 (2026-10-23):** added iPhone redirect sign-in fallback in `index.html` (installed iOS app only). Marvel migration still not run: needs Marvin's signed-in app.
