@@ -1,9 +1,9 @@
 # ComicsTracker — Project State
 
 > **Next chat name: `ComicsTracker ver 4`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **ComicsTracker ver 3**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **ComicsTracker ver 4**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
-**State version:** 3 (moved into the repo 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
+**State version:** 4 (moved into the repo 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
 **Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
 Single-file app, live and working. `pulllist-methodology.md` holds the PullList research method (not in this repo yet; attach it when doing PullList work).
 
@@ -144,7 +144,7 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 - localStorage only caches OAuth token and Drive fileIds; all comic data lives in Drive.
 
 ## Open items
-- [ ] Rename existing Marvel `Vol. X` series in Drive to `(LaunchYear)` (see Naming conventions). Rule confirmed 2026-10-22.
+- [ ] **Run the Marvel name migration** (tool is merged, not yet run): hard-refresh the app, Import tab → Normalise Marvel series names → check flagged rows → Apply. Do it BEFORE the next PullList import (task runs the 24th), or Import creates duplicates.
 - [ ] iPhone redirect sign-in fallback, if Marvin uses the app installed on iPhone.
 
 ## Change log
