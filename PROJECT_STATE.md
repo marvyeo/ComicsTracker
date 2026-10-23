@@ -31,6 +31,7 @@ Single-file app, live and working. `pulllist-methodology.md` holds the PullList 
 **4. Chat naming.** Use the **Next chat name** line at the top of this file; tell Marvin in the first reply, then bump it.
 
 ## Latest changes (Oct 2026, conductor chat)
+- **Sprints 13.3 + 13.2 + `lp-sso` (2026-10-23, conductor chat "Life Plan Roadmap ver 7"):** already on the shared OAuth client, so it now uses and publishes the shared sign-in (`lp-sso` in localStorage: a valid `drive.file` token from Life Plan or another app means no second sign-in; sign-out clears it). Added a manual "Sign-in window not opening? Try another way" link (uses the existing redirect flow) and an iPhone "Share → Add to Home Screen" hint on the sign-in card (iOS can't install web apps from a prompt). 13.2: "← Life Plan" link in the header, `viewport-fit=cover`, safe-area bottom padding, shared theme tokens `--lp-bg/--lp-surface/--lp-text/--lp-muted/--lp-accent`. `sw.js` cache `comicstracker-v3`. Not tested live.
 - **Save fix + Save button (2026-10-23, ver 4 chat):** bug: `persist()` only rewrote `comicstracker-archive.json` when the *set* of archived series changed, so renaming/editing an archived series (e.g. the Marvel migration) looked fine but reverted on reload. Now the archive is rewritten whenever its content changed (compared against `lastArchiveJson`; first save after load writes it once). `mutate()` returns the save promise; errors show the reason. New **Save** (floppy) button in the header calls `persist(true)` and toasts "Saved to Drive ✓". Refresh tooltip now warns it discards unsaved changes. Saving is otherwise automatic after every change.
 - **iPhone redirect sign-in (2026-10-23, ver 4 chat):** when the app runs as an installed iOS home-screen app, Connect uses a full-page Google OAuth redirect (implicit flow) instead of the GIS popup, and reads the token from the URL hash (state-checked, hash cleared). Desktop and browser tabs are unchanged. **Needs `https://marvyeo.github.io/ComicsTracker/` added under Authorized redirect URIs on the OAuth client in Google Cloud Console, or iPhone sign-in will fail with redirect_uri_mismatch.**
 - **`upcoming[]`** on every save: releases in the next 30 days (`type: release`); issues in active events are high priority. Shown on the Life Plan dashboard.
@@ -146,7 +147,7 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 - localStorage only caches OAuth token and Drive fileIds; all comic data lives in Drive.
 
 ## Open items
-- [ ] Add `https://marvyeo.github.io/ComicsTracker/` to Authorized redirect URIs (Google Cloud Console → Credentials → the OAuth client), then test sign-in on the installed iPhone app. Code is done and pushed.
+- [x] Marvin reported the redirect URIs done on 2026-10-23 (Roadmap ver 7); iPhone sign-in still untested. (Was: add `https://marvyeo.github.io/ComicsTracker/` to Authorized redirect URIs (Google Cloud Console → Credentials → the OAuth client), then test sign-in on the installed iPhone app. Code is done and pushed.)
 
 ## Change log
 - **ver 2 (2026-10-22):** moved into the repo as `PROJECT_STATE.md`; added Session Rules; recorded `upcoming[]`, the PullList task, PR #1, installability and the manifest id fix.
@@ -155,3 +156,4 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 - **ver 4 (2026-10-23):** added iPhone redirect sign-in fallback in `index.html` (installed iOS app only). Marvel migration still not run: needs Marvin's signed-in app.
 - **ver 4 (2026-10-23, later):** fixed archive-file saves not persisting edits to archived series; added header Save button; migration Apply now confirms the save.
 - **ver 4 (2026-10-23, end):** Marvel migration run and verified by Marvin; migration tool removed from `index.html`. Only open item left: the Google Cloud redirect URI for iPhone sign-in.
+- **2026-10-23 (conductor, Sprints 13.3 + 13.2):** shared `lp-sso` sign-in, manual redirect link, iPhone Add to Home Screen hint, "← Life Plan" link, safe area, theme tokens; `sw.js` cache `comicstracker-v3`. Not tested live.

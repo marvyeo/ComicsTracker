@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -26,6 +26,11 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <style>
+  /* Sprint 13.2: shared theme tokens (same names in every app, mapped to this app's palette) */
+  :root{ --lp-bg:#12141C; --lp-surface:#1B1E2A; --lp-text:#ECEDF3; --lp-muted:#9297B0; --lp-accent:#E8483C; }
+  .lp-back{display:inline-block;margin-bottom:8px;font-size:12px;text-decoration:none;color:var(--lp-muted);}
+  .lp-back:hover{color:var(--lp-text);}
+  #appRoot{padding-bottom:env(safe-area-inset-bottom);}
   :root{
     --bg:#12141C; --bgAlt:#0E1017; --surface:#1B1E2A; --surface2:#242840;
     --border:#2E3348; --text:#ECEDF3; --textDim:#9297B0; --textFaint:#5D6280;
@@ -72,6 +77,8 @@
     </p>
     <button id="connectBtn" class="btn btn-default w-full"><i data-lucide="log-in"></i> Connect Google Drive</button>
     <p id="gateStatus" class="text-xs mt-3" style="color:var(--textFaint)"></p>
+    <a href="#" id="altSignIn" class="text-xs mt-3 inline-block" style="color:var(--textFaint);text-decoration:underline">Sign-in window not opening? Try another way</a>
+    <p id="iosHint" class="text-xs mt-3 hidden" style="color:var(--textFaint)">On iPhone, install it from Safari: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
   </div>
 </div>
 
@@ -79,6 +86,7 @@
   <header class="halftone relative px-3 sm:px-6 py-8 sm:py-12" style="border-bottom:1px solid var(--border)">
     <div class="mx-auto max-w-5xl flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
       <div>
+        <a class="lp-back" href="https://marvyeo.github.io/LifePlan/" aria-label="Back to Life Plan">← Life Plan</a>
         <div class="flex items-center gap-2" style="color:var(--ink)">
           <i data-lucide="book-open"></i>
           <span class="text-xs font-bold uppercase tracking-widest">Longbox</span>
@@ -119,6 +127,24 @@ const CONFIG = {
   FILENAME: 'comicstracker-data.json',
   ARCHIVE_FILENAME: 'comicstracker-archive.json',
 };
+
+/* Shared sign-in with Life Plan and the other apps (Sprint 13.4). All apps share the origin https://marvyeo.github.io,
+   so localStorage is shared. Key `lp-sso` = { t, exp, email, scope, client }. Only a drive.file token for the shared
+   client is used or published. */
+const SSO_KEY = 'lp-sso';
+function ssoPublish(t, expiresIn){
+  try{
+    let email=''; try{ email=(JSON.parse(localStorage.getItem(SSO_KEY)||'null')||{}).email||''; }catch(e){}
+    localStorage.setItem(SSO_KEY, JSON.stringify({ t, exp: Date.now()+(Number(expiresIn)||3600)*1000, email, scope: CONFIG.SCOPE, client: CONFIG.CLIENT_ID }));
+  }catch(e){}
+}
+function ssoClear(){ try{ localStorage.removeItem(SSO_KEY); }catch(e){} }
+function ssoRead(){
+  try{
+    const x=JSON.parse(localStorage.getItem(SSO_KEY)||'null');
+    return (x && x.t && x.client===CONFIG.CLIENT_ID && x.scope===CONFIG.SCOPE && x.exp>Date.now()+60000) ? x : null;
+  }catch(e){ return null; }
+}
 
 /* ---------- design helpers ---------- */
 const PUBLISHER_PALETTE = {
@@ -201,6 +227,7 @@ function consumeRedirectResult(){
   tokenExpiry = Date.now() + Number(h.get('expires_in') || 3600) * 1000;
   localStorage.setItem('comicstracker_token', accessToken);
   localStorage.setItem('comicstracker_token_expiry', String(tokenExpiry));
+  ssoPublish(accessToken, h.get('expires_in'));
 }
 let pendingGateMsg = '';
 function initAuth(){
@@ -212,8 +239,14 @@ function initAuth(){
   consumeRedirectResult();
   const cachedToken = localStorage.getItem('comicstracker_token');
   const cachedExpiry = Number(localStorage.getItem('comicstracker_token_expiry') || 0);
+  const shared = ssoRead();
   if(cachedToken && cachedExpiry > Date.now() + 60000){
     accessToken = cachedToken; tokenExpiry = cachedExpiry;
+    boot();
+  } else if(shared){ // signed in through Life Plan or another app: no second sign-in
+    accessToken = shared.t; tokenExpiry = shared.exp;
+    localStorage.setItem('comicstracker_token', accessToken);
+    localStorage.setItem('comicstracker_token_expiry', String(tokenExpiry));
     boot();
   } else {
     showGate();
@@ -234,9 +267,16 @@ function onToken(resp){
   tokenExpiry = Date.now() + (resp.expires_in*1000);
   localStorage.setItem('comicstracker_token', accessToken);
   localStorage.setItem('comicstracker_token_expiry', String(tokenExpiry));
+  ssoPublish(accessToken, resp.expires_in);
   boot();
 }
 document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('altSignIn').addEventListener('click', (e)=>{ e.preventDefault(); startRedirectAuth(); });
+  (function(){
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    if(ios && !standalone) document.getElementById('iosHint').classList.remove('hidden');
+  })();
   document.getElementById('connectBtn').addEventListener('click', ()=>{
     document.getElementById('gateStatus').textContent = 'Opening Google sign-in…';
     if(useRedirectAuth()){ startRedirectAuth(); return; }
@@ -245,6 +285,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('signOutBtn').addEventListener('click', ()=>{
     localStorage.removeItem('comicstracker_token');
     localStorage.removeItem('comicstracker_token_expiry');
+    ssoClear();
     accessToken=null;
     location.reload();
   });
