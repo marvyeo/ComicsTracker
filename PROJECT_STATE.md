@@ -33,6 +33,7 @@ Single-file app, live and working. `pulllist-methodology.md` holds the PullList 
 ## Latest changes (Oct 2026, conductor chat)
 - **`upcoming[]`** on every save: releases in the next 30 days (`type: release`); issues in active events are high priority. Shown on the Life Plan dashboard.
 - **PullList is a scheduled task:** "PullList monthly solicitations" runs on the 24th at 8:46am SGT and writes `solicitations_YYYY-MM.json` to the Drive folder "PullList" (push + email summary). Marvin imports it by hand (his choice): Import → Upload PullList .json → review → Import selected.
+- **Marvel name migration tool (PR open, 2026-10-23):** Import tab → "Normalise Marvel series names". Scans Marvel series named `Vol. X`, proposes `Name (LaunchYear)` from the earliest dated issue (year editable, rows flagged if earliest tracked issue isn't #1), applies only on confirm via `mutate()` so active/archive split is handled. Skips a rename if the new name already exists. One-time tool; can be removed after use.
 - **PR #1 (merged 2026-10-23):** newly solicited series start unticked on PullList import; series already tracked stay ticked.
 - **Installable (21 Oct):** `manifest.json`, network-first `sw.js` (cache `comicstracker-v2`), ecosystem icons. No iPhone redirect sign-in fallback yet.
 - **Manifest id fixed (22 Oct):** `"id": "/ComicsTracker/"`.
@@ -149,3 +150,4 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 ## Change log
 - **ver 2 (2026-10-22):** moved into the repo as `PROJECT_STATE.md`; added Session Rules; recorded `upcoming[]`, the PullList task, PR #1, installability and the manifest id fix.
 - **ver 3 (2026-10-23):** merged PR #1 (new series start unticked on PullList import) into main. State file updated here, since the PR itself didn't touch it.
+- **ver 3 (2026-10-23, later):** added one-time Marvel `Vol. X` → `(LaunchYear)` migration tool on the Import tab (branch `feature/marvel-name-migration`). Not yet run on Drive data.
