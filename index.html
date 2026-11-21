@@ -582,6 +582,7 @@ function renderStats(){
   document.getElementById('statWant').textContent=want;
   document.getElementById('statArchived').textContent=archived;
 }
+try{ window.__hideRead = localStorage.getItem('ct-hide-read')==='1'; }catch(e){}
 function render(){
   const pageScrollY = window.scrollY;
   const importListEl = document.getElementById('importPreviewList');
@@ -653,6 +654,7 @@ function buildWeekView(range){
 
   let issues = DATA.issues.filter(i=> i.releaseDate && i.releaseDate>=range.start && i.releaseDate<=range.end);
   if(statusFilter) issues = issues.filter(i=>statusOf(i)===statusFilter);
+  if(window.__hideRead) issues = issues.filter(i=>!i.read);
   issues = issues.filter(i=>{
     const s = issueSeries(i);
     if(q && !(s && s.name.toLowerCase().includes(q))) return false;
@@ -717,6 +719,7 @@ function buildSeriesSections(){
     if(hideLimited)   out = out.filter(s=>s.status!=='limited');
     if(hideUpcoming)  out = out.filter(s=>s.status!=='upcoming');
     if(hideArchived)  out = out.filter(s=>!isArchivable(s));
+    if(window.__hideRead) out = out.filter(s=>{ const is=DATA.issues.filter(i=>i.seriesId===s.id); return is.length===0 || is.some(i=>!i.read); });
     return out;
   }
 
@@ -820,6 +823,7 @@ function viewLibrary(){
     </div>`;
   // Series-type hide toggles
   html += `<div class="flex items-center gap-2 flex-wrap">
+      <button class="btn ${window.__hideRead?'btn-default':'btn-ghost'}" id="toggleHideRead">${icon('eye-off')} ${window.__hideRead?'Hiding read':'Read'}</button>
       <button class="btn ${window.__hideNoDates?'btn-default':'btn-ghost'}" id="toggleHideNoDates">${icon('calendar-off')} ${window.__hideNoDates?'Hiding undated':'Undated'}</button>
       <button class="btn ${window.__hideUpcoming?'btn-default':'btn-ghost'}" id="toggleHideUpcoming">${icon('clock')} ${window.__hideUpcoming?'Hiding upcoming':'Upcoming'}</button>
       <button class="btn ${window.__hideCompleted?'btn-default':'btn-ghost'}" id="toggleHideCompleted">${icon('check-circle')} ${window.__hideCompleted?'Hiding completed':'Completed'}</button>
@@ -865,7 +869,8 @@ function newSeriesFormHtml(){
 function seriesRowHtml(s, color, statusFilter){
   let allIssues = DATA.issues.filter(i=>i.seriesId===s.id).sort((a,b)=>(a.releaseDate||'9999').localeCompare(b.releaseDate||'9999'));
   if(window.__hideNoDates) allIssues = allIssues.filter(i=>i.releaseDate);
-  const issues = statusFilter ? allIssues.filter(i=>statusOf(i)===statusFilter) : allIssues;
+  let issues = statusFilter ? allIssues.filter(i=>statusOf(i)===statusFilter) : allIssues;
+  if(window.__hideRead) issues = issues.filter(i=>!i.read);
   const readCount = allIssues.filter(i=>i.read).length;
   const open = openSeriesId === s.id;
   // Era and family badges
@@ -1455,6 +1460,8 @@ function wireEvents(){
   if(toggleHideUpcoming) toggleHideUpcoming.addEventListener('click', ()=>{ window.__hideUpcoming=!window.__hideUpcoming; render(); });
   const toggleHideCompleted = document.getElementById('toggleHideCompleted');
   if(toggleHideCompleted) toggleHideCompleted.addEventListener('click', ()=>{ window.__hideCompleted=!window.__hideCompleted; render(); });
+  const toggleHideRead = document.getElementById('toggleHideRead');
+  if(toggleHideRead) toggleHideRead.addEventListener('click', ()=>{ window.__hideRead=!window.__hideRead; try{localStorage.setItem('ct-hide-read',window.__hideRead?'1':'0');}catch(e){} render(); });
   const toggleHideLimited = document.getElementById('toggleHideLimited');
   if(toggleHideLimited) toggleHideLimited.addEventListener('click', ()=>{ window.__hideLimited=!window.__hideLimited; render(); });
   const toggleHideArchived = document.getElementById('toggleHideArchived');
