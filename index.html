@@ -1262,7 +1262,7 @@ function viewImport(){
       <div class="mt-3 flex gap-2 items-center flex-wrap">
         <button class="btn btn-default" id="previewImport">${icon('search')} Preview</button>
         <span class="text-xs" style="color:var(--textFaint)">or</span>
-        <label class="btn btn-subtle" style="cursor:pointer">${icon('upload')} Upload PullList .json
+        <label class="btn btn-subtle" style="cursor:pointer">${icon('upload')} Upload PullList or changes .json
           <input type="file" id="importFile" accept=".json,application/json" style="display:none" />
         </label>
         ${doneMsg}
@@ -1318,6 +1318,23 @@ function viewImport(){
         }).join('')}
       </div>
       <div class="mt-3"><button class="btn btn-default" id="doImport" ${included.length===0?'disabled':''}>${icon('check')} Import selected (${included.length})</button></div>
+    </div>`;
+  }
+  const dc = window.__dateChanges || [];
+  if(dc.length>0){
+    const sel = dc.filter(c=>c.__include).length;
+    html+=`<div class="card p-4">
+      <div class="text-sm font-semibold mb-1">Date changes — ${dc.length} found <span class="font-normal text-xs" style="color:var(--textFaint)">(${sel} selected)</span></div>
+      <div class="text-xs mb-2" style="color:var(--textFaint)">Applying a change keeps the old date in the issue's delay history. Cancelled or unmatched rows are shown but never applied.</div>
+      <div class="flex flex-col gap-1.5 max-h-[28rem] overflow-y-auto">
+        ${dc.map((c,idx)=>`<label class="flex items-center gap-2 rounded px-2 py-1.5 text-xs" style="background:var(--bgAlt);border:1px solid var(--border);opacity:${c.__issueId?1:0.5}">
+          <input type="checkbox" data-dc-include="${idx}" ${c.__include?'checked':''} ${c.__issueId?'':'disabled'} style="width:16px;height:16px" />
+          <span style="flex:1;min-width:0"><strong>${esc(c.seriesName)} #${esc(c.number)}</strong>
+            <span style="color:var(--textDim)"> ${c.__issueId? `${fmtDate(c.__current)} → ${fmtDate(c.newDate)}` : (c.kind==='cancelled'?'cancelled (not applied)':'not tracked / no match')}</span></span>
+          ${c.__issueId && c.__current===c.newDate ? '<span class="badge">already set</span>':''}
+        </label>`).join('')}
+      </div>
+      <div class="mt-3"><button class="btn btn-default" id="applyDateChanges" ${sel===0?'disabled':''}>${icon('check')} Apply selected (${sel})</button></div>
     </div>`;
   }
   html+=`</div>`;
@@ -1844,6 +1861,21 @@ function wireEvents(){
     reader.onload = (ev)=>{
       try{
         const parsed = JSON.parse(ev.target.result);
+        if(parsed && !Array.isArray(parsed) && Array.isArray(parsed.changes)){
+          // solicitation_changes_*.json: reschedules for issues already tracked
+          const list = parsed.changes.map(c=>{
+            const seriesName=(c.seriesName||c.series||'').toString().trim();
+            const number=(c.number!=null?c.number:c.issue!=null?c.issue:'').toString().trim();
+            const newDate=(c.newDate||c.new_date||c.releaseDate||'').toString().trim();
+            const kind=(c.kind||c.type||'delayed').toString().toLowerCase();
+            const m = seriesName ? findSeriesMatch(seriesName, c.publisher||'') : {series:null};
+            const issue = m.series && kind!=='cancelled' && /^\d{4}-\d{2}-\d{2}$/.test(newDate)
+              ? DATA.issues.find(i=>i.seriesId===m.series.id && String(i.number).toLowerCase()===number.toLowerCase()) : null;
+            return {seriesName: m.series?m.series.name:seriesName, number, newDate, kind,
+              __issueId: issue?issue.id:null, __current: issue?issue.releaseDate:'', __include: !!issue && issue.releaseDate!==newDate};
+          });
+          window.__dateChanges = list; window.__importPreview=[]; render(); return;
+        }
         const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.issues) ? parsed.issues : null);
         if(!rows) throw new Error('Expected a JSON array of issue rows.');
         setImportPreview(rows, { fromFile: true });
@@ -1854,6 +1886,22 @@ function wireEvents(){
     };
     reader.readAsText(file);
     e.target.value = '';
+  });
+  main.querySelectorAll('[data-dc-include]').forEach(el=>el.addEventListener('change', ()=>{
+    window.__dateChanges[+el.dataset.dcInclude].__include = el.checked; render();
+  }));
+  const applyDc = document.getElementById('applyDateChanges');
+  if(applyDc) applyDc.addEventListener('click', ()=>{
+    const todo = (window.__dateChanges||[]).filter(c=>c.__include && c.__issueId);
+    mutate(d=>{
+      todo.forEach(c=>{
+        const i=d.issues.find(x=>x.id===c.__issueId); if(!i || i.releaseDate===c.newDate) return;
+        i.dateHistory = i.dateHistory||[];
+        i.dateHistory.push({date:i.releaseDate, note:'delayed', changedOn: todayISO()});
+        i.releaseDate = c.newDate;
+      });
+    });
+    window.__dateChanges=[]; toast('Applied '+todo.length+' date change'+(todo.length===1?'':'s'));
   });
   function updateImportSummary(){
     const preview = window.__importPreview || [];

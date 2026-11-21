@@ -1,7 +1,7 @@
 # ComicsTracker — Project State
 
-> **Next chat name: `ComicsTracker ver 6`**
-> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **ComicsTracker ver 6**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
+> **Next chat name: `ComicsTracker ver 7`**
+> Claude: your FIRST reply in a new chat must start with "Rename this chat to: **ComicsTracker ver 7**" (you can't rename chats yourself). In your first commit this session, bump the number here by 1.
 
 **State version:** 6 (moved into the repo 2026-10-22 by the conductor chat "Life Plan Roadmap ver 3")
 **Where this lives:** `PROJECT_STATE.md` in the repo. New chats `git pull` and read it; no uploads needed.
@@ -152,10 +152,11 @@ Marvel Eras 1–4 [2004–2015]; next: Secret Wars 2015, then DC from Blackest N
 - [x] Marvin reported the redirect URIs done on 2026-10-23 (Roadmap ver 7); iPhone sign-in still untested. (Was: add `https://marvyeo.github.io/ComicsTracker/` to Authorized redirect URIs (Google Cloud Console → Credentials → the OAuth client), then test sign-in on the installed iPhone app. Code is done and pushed.)
 
 ## Open items (ver 6)
-- **Weekly solicit recheck (not built).** Design agreed in principle, awaiting Marvin's go: weekly task re-pulls the next ~3 months and diffs against the previous `solicitations_*.json` in Drive "PullList", writing `solicitation_changes_YYYY-MM-DD.json` (delayed / new / cancelled). The app can't apply these yet: Import never changes dates, so it needs an "Apply date changes" path that reuses the reschedule + `dateHistory` logic. The task can't read the app's own Drive data (drive.file scope), so it diffs against its own earlier files.
+- **Weekly solicit recheck (app side built in ver 6, task not yet created).** The app can now apply date changes (see change log). Remaining: create the weekly scheduled task, which must write `solicitation_changes_YYYY-MM-DD.json` as `{"changes":[{seriesName, number, publisher?, oldDate, newDate, kind:"delayed"|"moved"|"cancelled"}]}`. Original design: weekly task re-pulls the next ~3 months and diffs against the previous `solicitations_*.json` in Drive "PullList", writing `solicitation_changes_YYYY-MM-DD.json` (delayed / new / cancelled). The app can't apply these yet: Import never changes dates, so it needs an "Apply date changes" path that reuses the reschedule + `dateHistory` logic. The task can't read the app's own Drive data (drive.file scope), so it diffs against its own earlier files.
 - **Chapter titles:** blank because solicits only carry a title for some issues and the rule is never to invent one. Option: a backfill pass from League of Comic Geeks after release.
 
 ## Change log
+- **ver 6 (2026-11-21, later):** Import tab now accepts a `solicitation_changes_*.json` (`{changes:[…]}`) via the same upload button. It lists matched issues with old → new date, and "Apply selected" updates `releaseDate` and appends the old date to `dateHistory` (same as the manual reschedule). Cancelled/unmatched rows are shown, never applied. Not tested live; `sw.js` unchanged.
 - **ver 6 (2026-11-21):** moved to Claude Code. Added `README.md`; added `pulllist-methodology.md` (Aug file revised: `(LaunchYear)` naming for all publishers, alternate field names, solicitations task, titles note). Added **Hide read** toggle in Library. `sw.js` unchanged (network-first).
 - **ver 2 (2026-10-22):** moved into the repo as `PROJECT_STATE.md`; added Session Rules; recorded `upcoming[]`, the PullList task, PR #1, installability and the manifest id fix.
 - **ver 3 (2026-10-23):** merged PR #1 (new series start unticked on PullList import) into main. State file updated here, since the PR itself didn't touch it.
