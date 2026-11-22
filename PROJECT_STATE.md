@@ -28,6 +28,8 @@ Single-file app, live and working. `pulllist-methodology.md` (in the repo, revis
 - **Pause** when usage is around half the window, when the chat has grown long (heavy file reads, ~30+ turns), or before a step that won't finish in what's left. Claude can't see the remaining credit directly, so on L jobs it asks Marvin to check usage at each checkpoint.
 - **On pause,** Claude writes a `▶ RESUME HERE` block at the top of this file: what's done, the exact next step, branch and files, and the first command to run. It also gives Marvin a one-line restart prompt ("Continue <App> ver X from RESUME HERE"). The next session starts from that block and deletes it once the step is done.
 
+**5. Merge to main by default.** Marvin's standing instruction (2026-11-22): after committing on the session branch, fast-forward `main` and push it too, without asking each time.
+
 **4. Chat naming.** Use the **Next chat name** line at the top of this file; tell Marvin in the first reply, then bump it.
 
 ## Latest changes (Oct 2026, conductor chat)
