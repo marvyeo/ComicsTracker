@@ -1,0 +1,445 @@
+[
+ {
+  "series": "Nightwing (2016)",
+  "issue": "145",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Detective Comics (2016)",
+  "issue": "1116",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Action Comics (2016)",
+  "issue": "1105",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Superman (2023)",
+  "issue": "45",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-23",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Wonder Woman (2023)",
+  "issue": "40",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Green Lantern (2023)",
+  "issue": "42",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-23",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "The Amazing Spider-Man (2025)",
+  "issue": "1005",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "The Amazing Spider-Man (2025)",
+  "issue": "1006",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-23",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Batman (2025)",
+  "issue": "16",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-02",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Batgirl (2024)",
+  "issue": "26",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Batwoman (2026)",
+  "issue": "10",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Deathstroke the Terminator (2026)",
+  "issue": "10",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Emperor Aquaman (2026)",
+  "issue": "24",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Superman Unlimited (2025)",
+  "issue": "20",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Absolute Flash (2025)",
+  "issue": "22",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-16",
+  "events": [
+   "Absolute Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Absolute Green Lantern (2025)",
+  "issue": "21",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-02",
+  "events": [
+   "Absolute Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Absolute Superman (2024)",
+  "issue": "26",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-02",
+  "events": [
+   "Absolute Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Absolute Wonder Woman (2024)",
+  "issue": "27",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-23",
+  "events": [
+   "Absolute Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Teen Titans (2026)",
+  "issue": "4",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "X-Men (2024)",
+  "issue": "42",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [
+   "DNX"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "X-Men (2024)",
+  "issue": "43",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-23",
+  "events": [
+   "DNX"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Spider-Woman (2026)",
+  "issue": "2",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Venom (2026)",
+  "issue": "3",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-30",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "The Punisher (2026)",
+  "issue": "11",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Thor (2026)",
+  "issue": "804",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Wade Wilson: Deadpool (2026)",
+  "issue": "11",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Avengers (2026)",
+  "issue": "2",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Midnight Fantastic Four (2026)",
+  "issue": "3",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [
+   "Midnight Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Midnight Spider-Man (2026)",
+  "issue": "3",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [
+   "Midnight Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Midnight X-Men (2026)",
+  "issue": "3",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [
+   "Midnight Universe"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Barbara Gordon: Breakout (2026)",
+  "issue": "8",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "The Flash (2023)",
+  "issue": "40",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-23",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "The Fury of Firestorm (2026)",
+  "issue": "9",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Green Lantern Corps (2025)",
+  "issue": "23",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Justice League Unlimited (2024)",
+  "issue": "26",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-23",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Poison Ivy (2022)",
+  "issue": "50",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [
+   "Bad Seeds"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Supergirl (2025)",
+  "issue": "20",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Zatanna (2026)",
+  "issue": "9",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-23",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Black Cat (2025)",
+  "issue": "17",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Black Panther/Namor: Doomed (2026)",
+  "issue": "4",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [
+   "Avengers: Armageddon"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Friendly Neighborhood Mary Jane (2026)",
+  "issue": "2",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Gambit Gone (2026)",
+  "issue": "4",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-09",
+  "events": [
+   "Age of Apocalypse"
+  ],
+  "reading_order": null
+ },
+ {
+  "series": "Spectacular Spider-Man (2026)",
+  "issue": "7",
+  "title": "",
+  "publisher": "Marvel",
+  "date": "2026-12-16",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Gangs of Gotham (2026)",
+  "issue": "2",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-02",
+  "events": [],
+  "reading_order": null
+ },
+ {
+  "series": "Legion of Super-Heroes (2026)",
+  "issue": "4",
+  "title": "",
+  "publisher": "DC",
+  "date": "2026-12-09",
+  "events": [
+   "Next Level"
+  ],
+  "reading_order": null
+ }
+]
